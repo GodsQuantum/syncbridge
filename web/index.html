@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SyncBridge</title>
+<style>
+  :root{
+    --bg:#0d1117; --surface:#151b24; --surface2:#1b232f; --raise:#212c3b;
+    --line:#263041; --line2:#31405600;
+    --ink:#e8eef6; --muted:#8b9bb0; --dim:#5a6b82; --faint:#3a4759;
+    --cyan:#3dd7cf; --cyan-d:#186f6a; --cyan-glow:#3dd7cf40;
+    --amber:#e9b455; --red:#e56a7d; --green:#54cd8a; --violet:#9d8cf5;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --r:9px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:
+      radial-gradient(1200px 600px at 80% -10%, #12212a 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;
+    -webkit-font-smoothing:antialiased}
+  ::selection{background:var(--cyan-glow)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+
+  .app{max-width:1200px;margin:0 auto;padding:0 22px 90px}
+
+  /* ---------- topbar ---------- */
+  .top{display:flex;align-items:center;gap:16px;padding:20px 0 18px;
+    border-bottom:1px solid var(--line);margin-bottom:24px;position:sticky;top:0;
+    background:linear-gradient(var(--bg) 70%,transparent);z-index:20;backdrop-filter:blur(4px)}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:650;font-size:18px;letter-spacing:.01em}
+  .mark{width:26px;height:26px;position:relative;flex-shrink:0;display:flex;flex-direction:column;
+    justify-content:center;gap:4px}
+  .mark i{height:5px;border-radius:3px;display:block}
+  .mark i:nth-child(1){width:100%;background:linear-gradient(90deg,var(--cyan),var(--cyan-d));
+    box-shadow:0 0 8px var(--cyan-glow)}
+  .mark i:nth-child(2){width:60%;background:var(--faint);margin-left:auto}
+  .mark i:nth-child(3){width:100%;background:linear-gradient(90deg,var(--violet),#5a4bb0)}
+  .mark i:nth-child(4){display:none}
+  .brand small{color:var(--dim);font-family:var(--mono);font-size:11px;font-weight:400;letter-spacing:.03em}
+  .flex{flex:1}
+  .eng-pill{font-family:var(--mono);font-size:11px;color:var(--muted);border:1px solid var(--line);
+    padding:5px 9px;border-radius:20px;display:flex;gap:7px;align-items:center}
+  .eng-pill b{color:var(--dim);font-weight:500}
+  .eng-pill .on{color:var(--green)}
+  .eng-pill .off{color:var(--faint)}
+
+  /* ---------- buttons ---------- */
+  .btn{font:inherit;font-size:13px;font-weight:550;border:1px solid var(--line);
+    background:var(--surface2);color:var(--ink);padding:9px 15px;border-radius:7px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:7px;transition:.13s ease}
+  .btn:hover{border-color:var(--cyan-d);background:var(--raise)}
+  .btn:active{transform:translateY(1px)}
+  .btn.pri{background:var(--cyan);border-color:var(--cyan);color:#042927;font-weight:650}
+  .btn.pri:hover{background:#5fe6de;box-shadow:0 4px 18px var(--cyan-glow)}
+  .btn.ghost{background:transparent}
+  .btn.sm{padding:6px 11px;font-size:12px}
+  .btn.dgr:hover{border-color:var(--red);color:var(--red)}
+  .btn svg{width:14px;height:14px}
+
+  /* ---------- job list ---------- */
+  .section-h{display:flex;align-items:center;gap:11px;margin:0 0 15px;color:var(--muted);
+    font-family:var(--mono);font-size:12px;letter-spacing:.05em;text-transform:uppercase}
+  .section-h::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  .jobs{display:flex;flex-direction:column;gap:13px}
+  .job{background:linear-gradient(180deg,var(--surface),var(--surface));
+    border:1px solid var(--line);border-radius:var(--r);overflow:hidden;transition:.15s}
+  .job:hover{border-color:var(--faint)}
+  .job.disabled{opacity:.58}
+  .job.disabled .flow,.job.disabled .tags{filter:grayscale(.6)}
+  .off-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--dim);border:1px solid var(--line);padding:2px 7px;border-radius:5px;margin-left:8px;
+    vertical-align:middle;font-weight:500}
+  .btn.sm.on{color:var(--green);border-color:#2b5c42}
+  .btn.sm.kill{color:var(--red);border-color:#6b2f38}
+  .btn.sm.kill:hover{background:var(--red);color:#2a0d10;border-color:var(--red)}
+  .job-row{display:flex;align-items:center;gap:15px;padding:16px 17px}
+  .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;background:var(--faint);position:relative}
+  .dot.ok{background:var(--green);box-shadow:0 0 9px #2e7d5288}
+  .dot.error{background:var(--red);box-shadow:0 0 9px #a5384788}
+  .dot.running{background:var(--cyan);box-shadow:0 0 10px var(--cyan-glow)}
+  .dot.running::after{content:"";position:absolute;inset:-4px;border-radius:50%;
+    border:1px solid var(--cyan);animation:ring 1.3s ease-out infinite}
+  @keyframes ring{0%{transform:scale(.7);opacity:.9}100%{transform:scale(1.9);opacity:0}}
+
+  .job-body{flex:1;min-width:0}
+  .job-title{font-weight:600;font-size:15.5px;letter-spacing:.01em}
+  .flow{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:5px;
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .flow .p{background:var(--surface2);padding:3px 8px;border-radius:5px;border:1px solid var(--line);
+    max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .flow .ar{color:var(--cyan);font-size:15px}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.03em;padding:3px 8px;border-radius:5px;
+    border:1px solid var(--line);color:var(--muted);display:inline-flex;gap:5px;align-items:center}
+  .tag b{font-weight:600}
+  .tag.mirror{color:var(--amber);border-color:#5b4a26}
+  .tag.add{color:var(--green);border-color:#2b5c42}
+  .tag.move{color:var(--violet);border-color:#443c6b}
+  .tag.trig{color:var(--cyan);border-color:var(--cyan-d)}
+  .tag.eng{color:var(--dim)}
+  .tag.sys{color:var(--red);border-color:#6b2f38}
+  .job-act{display:flex;gap:7px;flex-shrink:0}
+
+  .job-meta{font-family:var(--mono);font-size:11px;color:var(--dim);padding:0 17px 13px;    display:flex;gap:20px;flex-wrap:wrap}
+  .next-run{color:var(--cyan)}
+  .live-bar{display:none;padding:0 17px 14px}
+  .live-bar.active{display:block}
+  .live-head{display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:11.5px;
+    color:var(--muted);margin-bottom:7px;flex-wrap:wrap}
+  .live-head .pct{color:var(--cyan);font-weight:600;font-size:13px}
+  .live-head .pct.scan{color:var(--amber);font-weight:500}
+  .live-head .chip{background:var(--surface2);border:1px solid var(--line);padding:2px 8px;border-radius:5px}
+  .live-head .eta{color:var(--green)}
+  .progress-track{height:6px;background:var(--surface2);border-radius:4px;overflow:hidden;border:1px solid var(--line)}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--cyan-d),var(--cyan));
+    width:0%;transition:width .4s ease;box-shadow:0 0 8px var(--cyan-glow)}
+  .progress-fill.indeterminate{width:30%!important;animation:slide 1.4s ease-in-out infinite}
+  @keyframes slide{0%{margin-left:-30%}100%{margin-left:100%}}
+  .console{background:#080b10;border-top:1px solid var(--line);font-family:var(--mono);
+    font-size:12px;line-height:1.7;padding:14px 17px;max-height:360px;overflow:auto;
+    white-space:pre-wrap;word-break:break-word;color:#a7b6c9}
+  .console:empty{display:none}
+  .console .cmd{color:var(--cyan)}
+  .console .sum{color:var(--violet)}
+  .console .del{color:var(--amber)}
+  .console .err{color:var(--red)}
+  .console .done{color:var(--green)}
+
+  .empty{border:1px dashed var(--line);border-radius:var(--r);padding:56px 24px;text-align:center}
+  .empty .big{font-size:44px;margin-bottom:14px;opacity:.5}
+  .empty b{display:block;font-size:17px;margin-bottom:6px}
+  .empty p{color:var(--muted);max-width:420px;margin:0 auto 20px}
+
+  /* ---------- modal ---------- */
+  .scrim{position:fixed;inset:0;background:rgba(5,8,13,.74);backdrop-filter:blur(3px);
+    display:none;align-items:flex-start;justify-content:center;padding:44px 20px;z-index:60;overflow:auto}
+  .scrim.open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--line);border-radius:13px;
+    width:100%;max-width:840px;box-shadow:0 24px 80px rgba(0,0,0,.5)}
+  .modal-h{padding:20px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+  .modal-h h2{font-size:17px;font-weight:620}
+  .modal-h .flex{flex:1}
+  .modal-b{padding:22px 24px}
+
+  .field{margin-bottom:20px}
+  .field>label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:7px;
+    text-transform:uppercase;letter-spacing:.05em;font-weight:600;font-family:var(--mono)}
+  .field input[type=text],.field input[type=number],.field select{width:100%;background:var(--bg);
+    border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:10px 12px;
+    font-family:var(--mono);font-size:13px}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--cyan-d);box-shadow:0 0 0 3px var(--cyan-glow)}
+  .hint{font-size:11.5px;color:var(--dim);margin-top:6px;line-height:1.5}
+  .hint b{color:var(--muted)}
+  .cron-presets{display:flex;flex-wrap:wrap;gap:7px}
+  .cron-chip{font-family:var(--mono);font-size:11.5px;padding:6px 11px;border-radius:6px;
+    border:1px solid var(--line);background:var(--bg);color:var(--muted);cursor:pointer;transition:.12s}
+  .cron-chip:hover{border-color:var(--cyan-d);color:var(--ink)}
+  .cron-chip.sel{border-color:var(--cyan);background:#0f1c22;color:var(--cyan)}
+  .cron-live{font-family:var(--sans);font-size:13px;color:var(--cyan);margin-top:9px;
+    padding:8px 11px;background:#0f1c22;border:1px solid var(--cyan-d);border-radius:6px;line-height:1.4}
+  .cron-live.bad{color:var(--red);border-color:#6b2f38;background:#1f1214}
+  .imp-item{border:1px solid var(--line);border-radius:8px;padding:13px 15px;margin-bottom:11px;background:var(--bg)}
+  .imp-item.warn{border-color:#5b4a26}
+  .imp-flow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-family:var(--mono);font-size:12.5px}
+  .imp-eng{color:var(--cyan);font-weight:600;text-transform:uppercase;font-size:10.5px;
+    border:1px solid var(--cyan-d);padding:2px 7px;border-radius:5px}
+  .imp-flow .p{background:var(--surface2);padding:3px 8px;border-radius:5px;border:1px solid var(--line);
+    max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+  .imp-flow .arrow{color:var(--cyan)}
+  .imp-meta{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:9px}
+  .imp-meta b{color:var(--muted)}
+  .imp-file{margin-left:auto;color:var(--faint)}
+  .imp-warn{font-size:11.5px;color:var(--amber);margin-top:8px}
+  .imp-actions{margin-top:11px}
+
+  /* ---------- dual pane ---------- */
+  .dual{display:grid;grid-template-columns:1fr 44px 1fr;gap:0;align-items:stretch;margin-bottom:8px}
+  .pane{background:var(--bg);border:1px solid var(--line);border-radius:9px;overflow:hidden;
+    display:flex;flex-direction:column;min-height:230px}
+  .pane-h{padding:9px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;
+    font-family:var(--mono);font-size:11px}
+  .pane-h .lab{color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .pane-h .lab.src{color:var(--cyan)}
+  .pane-h .lab.dst{color:var(--violet)}
+  .pane-cur{padding:8px 12px;font-family:var(--mono);font-size:11.5px;color:var(--muted);
+    border-bottom:1px solid var(--line);word-break:break-all;background:var(--surface)}
+  .pane-cur b{color:var(--ink)}
+  .pane-list{flex:1;overflow:auto;padding:6px}
+  .pane-item{padding:8px 11px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:12.5px;
+    display:flex;align-items:center;gap:9px;color:var(--muted)}
+  .pane-item:hover{background:var(--surface2);color:var(--ink)}
+  .pane-item.up{color:var(--dim)}
+  .pane-item .ic{width:14px;color:var(--cyan);flex-shrink:0}
+  .pane-item.dst-i .ic{color:var(--violet)}
+  .pane-pick{padding:9px 12px;border-top:1px solid var(--line);display:flex;gap:8px}
+  .pane-pick .cur-mini{flex:1;font-family:var(--mono);font-size:11px;color:var(--dim);
+    align-self:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .arrow-col{display:flex;align-items:center;justify-content:center;color:var(--cyan);font-size:20px}
+
+  /* ---------- mode/trigger cards ---------- */
+  .cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .card{border:1px solid var(--line);border-radius:8px;padding:12px 13px;cursor:pointer;
+    background:var(--bg);transition:.13s;position:relative}
+  .card:hover{border-color:var(--faint)}
+  .card.sel{border-color:var(--cyan);background:#0f1c22}
+  .card .ct{font-weight:600;font-size:13.5px;margin-bottom:4px;display:flex;align-items:center;gap:7px}
+  .card .cd{font-size:11.5px;color:var(--muted);line-height:1.45}
+  .card.sel.mirror .ct{color:var(--amber)}
+  .card.sel.add .ct{color:var(--green)}
+  .card.sel.move .ct{color:var(--violet)}
+  .card .ck{position:absolute;top:11px;right:11px;width:15px;height:15px;border-radius:50%;
+    border:1px solid var(--line);opacity:0;transition:.13s}
+  .card.sel .ck{opacity:1;border-color:var(--cyan);background:var(--cyan)}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .adv-toggle{display:flex;align-items:center;gap:9px;cursor:pointer;color:var(--muted);
+    font-size:12.5px;font-family:var(--mono);margin:4px 0 16px;user-select:none}
+  .adv-toggle .chev{transition:.2s}
+  .adv-toggle.open .chev{transform:rotate(90deg)}
+  .adv{display:none}
+  .adv.open{display:block}
+  .switch-row{display:flex;align-items:flex-start;gap:11px;padding:11px 0;border-top:1px solid var(--line)}
+  .switch-row:first-child{border-top:none}
+  .sw{width:38px;height:22px;border-radius:12px;background:var(--surface2);border:1px solid var(--line);
+    position:relative;cursor:pointer;flex-shrink:0;transition:.15s;margin-top:1px}
+  .sw::after{content:"";position:absolute;width:16px;height:16px;border-radius:50%;background:var(--dim);
+    top:2px;left:2px;transition:.15s}
+  .sw.on{background:var(--cyan-d);border-color:var(--cyan)}
+  .sw.on::after{background:var(--cyan);left:18px}
+  .switch-txt{flex:1}
+  .switch-txt b{font-size:13px;display:block;margin-bottom:2px}
+  .switch-txt span{font-size:11.5px;color:var(--muted);line-height:1.45}
+
+  .modal-f{padding:16px 24px;border-top:1px solid var(--line);display:flex;gap:11px;justify-content:flex-end;
+    position:sticky;bottom:0;background:var(--surface)}
+
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);
+    background:var(--raise);border:1px solid var(--line);border-radius:9px;padding:12px 20px;
+    font-size:13px;z-index:90;opacity:0;transition:.22s;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{border-color:var(--red);color:var(--red)}
+  .toast.ok{border-color:var(--green)}
+
+  @media(max-width:760px){
+    .dual{grid-template-columns:1fr;gap:12px}.arrow-col{transform:rotate(90deg)}
+    .cards{grid-template-columns:1fr}.split{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">
+      <span class="mark"><i></i><i></i><i></i><i></i></span>
+      <span>SyncBridge<br><small>rsync · rclone · local-to-local</small></span>
+    </div>
+    <span class="flex"></span>
+    <button class="btn ghost sm" id="langtog" onclick="toggleLang()" title="Language / Langue"></button>
+    <span class="eng-pill" id="eng"><b>moteurs</b> <span id="eng-list">…</span></span>
+    <button class="btn" onclick="openImport()">⤵ Importer</button>
+    <button class="btn pri" onclick="openEditor()">
+      <svg viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      Nouveau job
+    </button>
+  </div>
+
+  <div class="section-h">Jobs de synchronisation</div>
+  <div id="jobs" class="jobs"></div>
+</div>
+
+<!-- ===== Éditeur ===== -->
+<div class="scrim" id="scrim">
+  <div class="modal">
+    <div class="modal-h">
+      <h2 id="mtitle">Nouveau job</h2>
+      <span class="flex"></span>
+      <button class="btn ghost sm" onclick="closeEditor()">✕</button>
+    </div>
+    <div class="modal-b">
+      <input type="hidden" id="f-id">
+      <div class="field">
+        <label>Nom</label>
+        <input type="text" id="f-name" placeholder="ex. Production → Backup nocturne">
+      </div>
+
+      <!-- Type de job -->
+      <div class="field">
+        <label>Type de job</label>
+        <div class="cards">
+          <div class="card sel" id="k-sync" onclick="setKind('sync')"><span class="ck"></span>
+            <div class="ct">Synchronisation</div>
+            <div class="cd">Copie un dossier A → B (rsync/rclone). Le cas d'origine.</div>
+          </div>
+          <div class="card" id="k-command" onclick="setKind('command')"><span class="ck"></span>
+            <div class="ct">Commande / script</div>
+            <div class="cd">Lance une commande ou un script (ex. <b>docker system prune -f</b>, <b>/import/scripts/CRON/DIAG-LIGHT.sh</b>). Déclenchable en manuel, cron ou surveillance.</div>
+          </div>
+        </div>
+        <input type="hidden" id="f-kind" value="sync">
+      </div>
+
+      <!-- Commande (type=command) -->
+      <div class="field" id="cmd-only" style="display:none">
+        <label>Commande à exécuter</label>
+        <input type="text" id="f-command" placeholder="ex. /import/scripts/CRON/CLEANUP_DOCKER.sh">
+        <div class="hint">Exécutée via <b>sh -c</b> dans le conteneur. <b>stdout/stderr</b> capturés et streamés dans les logs (bouton « Lancer »). Job Docker : la socket doit être montée (voir compose).</div>
+      </div>
+
+      <!-- Backend d'exécution -->
+      <div class="field">
+        <label data-i18n="lbl_backend">Exécution</label>
+        <div class="cards">
+          <div class="card sel" id="b-syncbridge" onclick="setBackend('syncbridge')"><span class="ck"></span>
+            <div class="ct" data-i18n="be_sb_t">Backend SyncBridge</div>
+            <div class="cd" data-i18n="be_sb_d">SyncBridge exécute le job : logs en direct, bouton d'arrêt, verrou anti-chevauchement. S'arrête si le conteneur s'arrête.</div>
+          </div>
+          <div class="card" id="b-system" onclick="setBackend('system')"><span class="ck"></span>
+            <div class="ct" data-i18n="be_sys_t">Backend Système</div>
+            <div class="cd" data-i18n="be_sys_d">Écrit un vrai cron/systemd sur l'hôte : le job <b>survit à une panne Docker</b>. Demande un déclencheur cron ou surveillance (pas manuel) + des montages hôte en écriture. Pas de logs live.</div>
+          </div>
+        </div>
+        <input type="hidden" id="f-backend" value="syncbridge">
+      </div>
+
+      <!-- Timeout (tous types) -->
+      <div class="field">
+        <label data-i18n="lbl_timeout">Délai max d'exécution (s)</label>
+        <input type="number" id="f-timeout" min="0" placeholder="0" style="max-width:160px">
+        <div class="hint" data-i18n="hint_timeout">Tue le job s'il dépasse ce temps (anti-blocage). <b>0</b> = pas de limite.</div>
+      </div>
+
+      <!-- Dual pane -->
+      <div class="sync-only">
+      <label style="font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;font-family:var(--mono);display:block;margin-bottom:8px" data-i18n="lbl_folders">Dossiers</label>
+      <div class="dual">
+        <div class="pane">
+          <div class="pane-h"><span class="ic" style="color:var(--cyan)">◆</span><span class="lab src">Source (A)</span></div>
+          <div class="pane-cur" id="src-cur">/mnt</div>
+          <div class="pane-list" id="src-list"></div>
+          <div class="pane-pick">
+            <span class="cur-mini" id="src-mini">—</span>
+            <button class="btn sm pri" onclick="pick('src')">Choisir</button>
+          </div>
+        </div>
+        <div class="arrow-col">→</div>
+        <div class="pane">
+          <div class="pane-h"><span class="ic" style="color:var(--violet)">◆</span><span class="lab dst">Destination (B)</span></div>
+          <div class="pane-cur" id="dst-cur">/mnt</div>
+          <div class="pane-list" id="dst-list"></div>
+          <div class="pane-pick">
+            <span class="cur-mini" id="dst-mini">—</span>
+            <button class="btn sm pri" onclick="pick('dst')">Choisir</button>
+          </div>
+        </div>
+      </div>
+      <input type="hidden" id="f-source"><input type="hidden" id="f-dest">
+      <div class="hint" style="margin-bottom:20px">C'est le <b>contenu</b> de la source qui est copié dans la destination (pas le dossier lui-même).</div>
+
+      <!-- Mode -->
+      <div class="field">
+        <label>Comportement de copie</label>
+        <div class="cards">
+          <div class="card add sel" id="m-add" onclick="setMode('add')"><span class="ck"></span>
+            <div class="ct">Accumulation</div>
+            <div class="cd">Ajoute les nouveaux fichiers et met à jour les modifiés. <b>Ne supprime jamais</b> dans B. Le plus sûr.</div>
+          </div>
+          <div class="card mirror" id="m-mirror" onclick="setMode('mirror')"><span class="ck"></span>
+            <div class="ct">Miroir exact</div>
+            <div class="cd">B devient une copie identique de A. <b>Supprime dans B</b> ce qui a disparu de A. Attention aux suppressions.</div>
+          </div>
+          <div class="card move" id="m-move" onclick="setMode('move')"><span class="ck"></span>
+            <div class="ct">Déplacement</div>
+            <div class="cd">Copie vers B puis <b>vide la source A</b>. Pour évacuer un dossier de transit.</div>
+          </div>
+        </div>
+        <input type="hidden" id="f-mode" value="add">
+      </div>
+      </div><!-- /sync-only (dossiers + mode) -->
+
+      <!-- Trigger -->
+      <div class="field">
+        <label>Fréquence</label>
+        <div class="cards">
+          <div class="card sel" id="t-manual" onclick="setTrig('manual')"><span class="ck"></span>
+            <div class="ct">Manuel</div>
+            <div class="cd">Se lance uniquement quand tu cliques « Lancer maintenant ».</div>
+          </div>
+          <div class="card" id="t-cron" onclick="setTrig('cron')"><span class="ck"></span>
+            <div class="ct">Planifié</div>
+            <div class="cd">Se lance à heure fixe via une expression cron.</div>
+          </div>
+          <div class="card" id="t-watch" onclick="setTrig('watch')"><span class="ck"></span>
+            <div class="ct">Constant</div>
+            <div class="cd">Surveille A en continu et sync <b>dès qu'un fichier change</b> (attend 3 s de calme).</div>
+          </div>
+        </div>
+        <input type="hidden" id="f-trigger" value="manual">
+        <div id="cron-wrap" style="display:none;margin-top:12px">
+          <div class="cron-presets" id="cron-presets"></div>
+          <input type="text" id="f-cron" placeholder="0 3 * * *" style="margin-top:10px">
+          <div class="cron-live" id="cron-live">↳ choisis un préréglage ou tape une expression</div>
+          <div class="hint" style="margin-top:8px">Format : <b>min heure jour mois jour-semaine</b>. Le <b>*</b> = "chaque".</div>
+        </div>
+        <div id="watch-wrap" style="display:none;margin-top:12px">
+          <div class="split">
+            <div class="field" style="margin-bottom:0">
+              <label>Filtre (motif)</label>
+              <input type="text" id="f-watchglob" placeholder="ex. *.mp4, *.m4a">
+              <div class="hint">Ne déclenche que si un fichier correspond. Vide = tout. Sépare par des virgules.</div>
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label>Mode de surveillance</label>
+              <select id="f-watchmode">
+                <option value="hybrid">Hybride : événements + scan (recommandé, NFS)</option>
+                <option value="event">Événements : inotify seul (disque local rapide)</option>
+                <option value="poll">Scan périodique : seul fiable sur NFS distant</option>
+              </select>
+              <div class="hint">Sur un montage <b>NFS</b>, inotify ne voit pas les écritures distantes : garde <b>Hybride</b> ou <b>Scan</b>.</div>
+            </div>
+          </div>
+          <div class="split" style="margin-top:12px">
+            <div class="field" style="margin-bottom:0">
+              <label>Anti-rebond (s)</label>
+              <input type="number" id="f-debounce" min="1" placeholder="10">
+              <div class="hint">Attend N s de calme après le dernier changement avant de lancer. Coalesce les rafales.</div>
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label>Intervalle de scan (s)</label>
+              <input type="number" id="f-pollsec" min="1" placeholder="300">
+              <div class="hint">Fréquence du scan (modes Hybride/Scan). 300 = 5 min, comme un watcher classique.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Moteur + comparaison -->
+      <div class="sync-only">
+      <div class="split">
+        <div class="field">
+          <label>Moteur</label>
+          <select id="f-engine">
+            <option value="rsync">rsync — rapide, idéal disque local</option>
+            <option value="rclone">rclone — plus de contrôle, remotes cloud</option>
+          </select>
+          <div class="hint">Pour du local-to-local, <b>rsync</b> suffit et va vite. rclone utile si un jour tu vises un cloud.</div>
+        </div>
+        <div class="field">
+          <label>Méthode de comparaison</label>
+          <select id="f-compare">
+            <option value="time">Taille + date — rapide (défaut)</option>
+            <option value="checksum">Checksum — sûr, plus lent</option>
+          </select>
+          <div class="hint"><b>Date</b> : compare taille et horodatage. <b>Checksum</b> : lit le contenu, détecte la corruption, mais relit tout.</div>
+        </div>
+      </div>
+
+      <!-- Avancé -->
+      <div class="adv-toggle" id="adv-toggle" onclick="toggleAdv()">
+        <span class="chev">▸</span> Options avancées (protection & débit)
+      </div>
+      <div class="adv" id="adv">
+        <div class="switch-row" style="border-top:none">
+          <div class="sw" id="sw-sysbackup" onclick="toggleSw('sysBackup')"></div>
+          <div class="switch-txt"><b>Backup système fidèle 🔒</b>
+            <span>Copie exacte : préserve propriétaires, permissions, ACL et hardlinks (flags <b>-aHAX --numeric-ids --fake-super</b>). Les fichiers restent en 1000 sur la destination, mais les vraies identités root sont stockées dans les xattr — ce qui rend le backup <b>restaurable à l'identique</b> (resurrection d'un serveur). <b>Nécessite le conteneur en root</b> (voir compose). Sans cette option, tout est copié en 1000:1000 simple.</span></div>
+        </div>
+        <div class="switch-row">
+          <div class="sw" id="sw-backup" onclick="toggleSw('backup')"></div>
+          <div class="switch-txt"><b>Corbeille de sécurité</b>
+            <span>Avant d'écraser ou supprimer dans B, déplace l'ancienne version dans un dossier daté <b>.sb-backup/&lt;date&gt;</b>. Filet de sécurité contre les erreurs.</span>
+            <div id="keep-wrap" style="display:none;margin-top:9px">
+              <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:5px;font-family:var(--mono)">Versions à conserver</label>
+              <input type="number" id="f-backupkeep" min="0" placeholder="ex. 5" style="max-width:140px">
+              <div class="hint">Nombre de dossiers <b>.sb-backup/</b> gardés. À chaque run, les plus anciens au-delà sont purgés. <b>0</b> = tout garder. Ex. <b>5</b> = un versioning des 5 dernières exécutions.</div>
+            </div>
+          </div>
+        </div>
+        <div class="switch-row">
+          <div class="sw" id="sw-skipnew" onclick="toggleSw('skipNew')"></div>
+          <div class="switch-txt"><b>Ne pas écraser les fichiers plus récents dans B</b>
+            <span>Si un fichier dans B est plus récent que dans A, on le garde. Utile si plusieurs sources alimentent une même destination.</span></div>
+        </div>
+        <div class="split" style="margin-top:16px">
+          <div class="field" style="margin-bottom:0">
+            <label>Limite de débit</label>
+            <input type="text" id="f-bwlimit" placeholder="ex. 30M">
+            <div class="hint">Bride la vitesse pour ne pas saturer le disque/réseau. <b>10M</b> = 10 Mo/s. Vide = illimité.</div>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Garde-fou suppressions</label>
+            <input type="number" id="f-maxdel" placeholder="ex. 100" min="0">
+            <div class="hint">En mode miroir, <b>abandonne</b> si plus de N fichiers seraient supprimés. Protège d'un effacement massif accidentel. 0 = désactivé.</div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:16px;margin-bottom:0">
+          <label>Exclusions</label>
+          <input type="text" id="f-exclude" placeholder="ex. .DS_Store, *.tmp, @eaDir">
+          <div class="hint">Motifs à ignorer, séparés par des virgules. Ex. fichiers système NAS (<b>@eaDir</b>), temporaires (<b>*.tmp</b>).</div>
+        </div>
+      </div>
+      </div><!-- /sync-only (moteur + avancé) -->
+    </div>
+    <div class="modal-f">
+      <button class="btn ghost" onclick="closeEditor()">Annuler</button>
+      <button class="btn pri" onclick="saveJob()">Enregistrer le job</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Import ===== -->
+<div class="scrim" id="import-scrim">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-h">
+      <h2>Importer des copies existantes</h2>
+      <span class="flex"></span>
+      <button class="btn ghost sm" onclick="closeImport()">✕</button>
+    </div>
+    <div class="modal-b">
+      <div class="hint" style="margin-bottom:16px">
+        SyncBridge scanne tes scripts et crontabs (montés en lecture seule) pour trouver
+        les commandes <b>rsync</b> et <b>rclone</b>. Chaque copie trouvée peut être importée
+        comme job (créé <b>désactivé</b> — tu vérifies puis actives). L'original n'est pas touché.
+      </div>
+      <div id="import-list"><div class="hint">Scan en cours…</div></div>
+    </div>
+    <div class="modal-f">
+      <button class="btn ghost" onclick="scanImport()">↻ Rescanner</button>
+      <button class="btn pri" onclick="closeImport()">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
