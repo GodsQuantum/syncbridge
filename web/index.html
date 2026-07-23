@@ -179,6 +179,11 @@
   .imp-file{margin-left:auto;color:var(--faint)}
   .imp-warn{font-size:11.5px;color:var(--amber);margin-top:8px}
   .imp-actions{margin-top:11px}
+  .sh-sub{color:var(--dim);text-transform:none;letter-spacing:0;font-weight:400}
+  .sys-warn{background:#1f1214;border:1px solid #6b2f38;color:var(--red);border-radius:8px;
+    padding:11px 13px;font-size:12px;line-height:1.55;margin:0 0 14px}
+  .sys-warn code{background:rgba(0,0,0,.35);padding:1px 5px;border-radius:4px;font-family:var(--mono);font-size:11px;color:var(--amber)}
+  .imp-item.sys{border-color:#3a2a2e;background:#140f11}
 
   /* ---------- dual pane ---------- */
   .dual{display:grid;grid-template-columns:1fr 44px 1fr;gap:0;align-items:stretch;margin-bottom:8px}
@@ -274,7 +279,6 @@
     </div>
     <span class="flex"></span>
     <button class="btn ghost sm" id="langtog" onclick="toggleLang()" title="Language / Langue"></button>
-    <span class="eng-pill" id="eng"><b>moteurs</b> <span id="eng-list">…</span></span>
     <button class="btn" onclick="openImport()">⤵ Importer</button>
     <button class="btn pri" onclick="openEditor()">
       <svg viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
