@@ -259,7 +259,7 @@
   <div class="top">
     <div class="brand">
       <span class="mark"><i></i><i></i><i></i><i></i></span>
-      <span>SyncBridge<br><small>rsync · rclone · local-to-local</small></span>
+      <span>SyncBridge<br><small>cron · watch · rsync · scripts</small></span>
     </div>
     <span class="flex"></span>
     <button class="btn ghost sm" id="langtog" onclick="toggleLang()" title="Language / Langue"></button>
@@ -271,7 +271,7 @@
     </button>
   </div>
 
-  <div class="section-h">Jobs de synchronisation</div>
+  <div class="section-h">Jobs</div>
   <div id="jobs" class="jobs"></div>
 </div>
 
@@ -398,7 +398,7 @@
           </div>
           <div class="card" id="t-watch" onclick="setTrig('watch')"><span class="ck"></span>
             <div class="ct">Constant</div>
-            <div class="cd">Surveille A en continu et sync <b>dès qu'un fichier change</b> (attend 3 s de calme).</div>
+            <div class="cd">Surveille un dossier et déclenche <b>dès qu'un fichier change</b> (attend le calme).</div>
           </div>
         </div>
         <input type="hidden" id="f-trigger" value="manual">
@@ -409,6 +409,11 @@
           <div class="hint" style="margin-top:8px">Format : <b>min heure jour mois jour-semaine</b>. Le <b>*</b> = "chaque".</div>
         </div>
         <div id="watch-wrap" style="display:none;margin-top:12px">
+          <div class="field" id="watch-src-wrap" style="display:none;margin-bottom:12px">
+            <label>Dossier à surveiller</label>
+            <input type="text" id="f-watchsrc" placeholder="/mnt/notes/voice">
+            <div class="hint">Le dossier surveillé : un changement dedans déclenche la commande.</div>
+          </div>
           <div class="split">
             <div class="field" style="margin-bottom:0">
               <label>Filtre (motif)</label>
@@ -518,15 +523,13 @@
 <div class="scrim" id="import-scrim">
   <div class="modal" style="max-width:720px">
     <div class="modal-h">
-      <h2>Importer des copies existantes</h2>
+      <h2>Importer depuis le système</h2>
       <span class="flex"></span>
       <button class="btn ghost sm" onclick="closeImport()">✕</button>
     </div>
     <div class="modal-b">
       <div class="hint" style="margin-bottom:16px">
-        SyncBridge scanne tes scripts et crontabs (montés en lecture seule) pour trouver
-        les commandes <b>rsync</b> et <b>rclone</b>. Chaque copie trouvée peut être importée
-        comme job (créé <b>désactivé</b> — tu vérifies puis actives). L'original n'est pas touché.
+        SyncBridge scanne tout ton système (crontabs, unités systemd, watchers inotify) et les commandes rsync/rclone de tes scripts. Importe n'importe lequel comme job géré (créé <b>désactivé</b> — tu vérifies puis actives). Ton système n'est pas touché.
       </div>
       <div id="import-list"><div class="hint">Scan en cours…</div></div>
     </div>
