@@ -2,6 +2,7 @@
 const $=s=>document.querySelector(s);
 let JOBS=[], sw={backup:false,skipNew:false,sysBackup:false};
 let paneState={src:"/mnt",dst:"/mnt"};
+let SYS_ALL=[], SEL={};
 
 const ICON={
   play:'<svg viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>',
@@ -300,6 +301,7 @@ async function scanImport(){
   try{ sys=await (await fetch("/api/system/scan")).json(); }catch(e){}
   try{ imp=await (await fetch("/api/import/scan")).json(); }catch(e){}
   const items=sys.items||[], found=imp.found||[];
+  items.forEach((it,i)=>it.__idx=i); SYS_ALL=items; SEL={};
   if(!items.length && !found.length){
     box.innerHTML=`<div class="empty" style="padding:32px">
       <b>Rien détecté sur le système</b>
@@ -323,11 +325,12 @@ async function scanImport(){
     html+=systems.map(it=>renderSysItem(it,true)).join("");
   }
   box.innerHTML=html;
+  updateBatchBar();
 }
 const SYS_TYPE={"cron":["⏰","cron"],"systemd-service":["⚙️","systemd service"],"systemd-timer":["⚙️","systemd timer"],"systemd-path":["👀","systemd .path"],"inotify-proc":["👀","inotify"]};
 function renderSysItem(it,isSys){
-  const t=SYS_TYPE[it.type]||["•",it.type];
-  const managed=it.managed?'<div class="imp-warn" style="color:var(--green)">✓ déjà géré par SyncBridge</div>':'';
+  const t=SYS_TYPE[it.type]||["\u2022",it.type];
+  const managed=it.managed?'<div class="imp-warn" style="color:var(--green)">\u2713 déjà géré par SyncBridge</div>':'';
   const J=JSON.stringify(it).replace(/'/g,"&#39;");
   let sysBtn="";
   if(!it.managed){
@@ -339,6 +342,7 @@ function renderSysItem(it,isSys){
         : `<button class="btn sm" style="color:var(--amber);border-color:#5b4a26" onclick='sysToggle(${J})'>Désactiver sur le système</button>`;
     }
   }
+  const chk=`<label class="imp-sel"><input type="checkbox" onchange="selSys(${it.__idx},this.checked)" ${SEL[it.__idx]?'checked':''}> sél.</label>`;
   const offLbl=it.disabled?' <span class="off-lbl">désactivé (système)</span>':'';
   return `<div class="imp-item ${isSys?'sys':''}" ${it.disabled?'style="opacity:.72"':''}>
     <div class="imp-flow">
@@ -347,13 +351,15 @@ function renderSysItem(it,isSys){
       ${it.schedule?`<span class="p">${esc(it.schedule)}</span>`:""}${offLbl}
     </div>
     <div class="imp-meta">
-      ${it.target?`<span>→ <b>${esc(it.target)}</b></span>`:'<span>commande non extraite (à compléter)</span>'}
+      ${it.target?`<span>\u2192 <b>${esc(it.target)}</b></span>`:'<span>commande non extraite (à compléter)</span>'}
       <span class="imp-file">${esc((it.file||"").split("/").pop())}</span>
     </div>
     ${managed}
     <div class="imp-actions">
+      ${chk}
       <button class="btn sm ${isSys?'':'pri'}" onclick='importSys(${J})'>Importer${isSys?' (visualiser)':''}</button>
       ${sysBtn}
+      <button class="btn sm" style="color:var(--red);border-color:#6b2f38" onclick='delSys([${it.__idx}])'>Supprimer</button>
     </div>
   </div>`;
 }
@@ -394,6 +400,45 @@ async function sysKill(it){
   toast("Process arrêté","ok"); scanImport();
 }
 async function logout(){ try{ await fetch("/api/auth/logout",{method:"POST"}); }catch(e){} location.replace("/"); }
+function selSys(idx,on){ if(on)SEL[idx]=SYS_ALL[idx]; else delete SEL[idx]; updateBatchBar(); }
+function updateBatchBar(){ const bar=$("#imp-batch"); if(!bar)return; const n=Object.keys(SEL).length; bar.style.display=n?"flex":"none"; const c=$("#imp-batch-n"); if(c)c.textContent=n; }
+function delSelection(){ delSys(Object.keys(SEL).map(Number)); }
+async function delSys(idxs){
+  const items=idxs.map(i=>SYS_ALL[i]).filter(Boolean);
+  if(!items.length) return;
+  const ans=prompt(`Supprimer DÉFINITIVEMENT ${items.length} déclencheur(s) du système ?\n\nUne copie est sauvegardée dans la Corbeille (récupérable).\nTape « delete » pour confirmer :`);
+  if((ans||"").toLowerCase().trim()!=="delete") return toast("Suppression annulée","err");
+  const r=await fetch("/api/system/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({confirm:"delete",items})});
+  if(!r.ok) return toast(await r.text(),"err");
+  const res=await r.json();
+  const ok=res.filter(x=>x.state==="deleted").length, err=res.filter(x=>x.state==="error");
+  toast(err.length?`${ok} supprimé(s), ${err.length} échec(s) : ${err[0].error}`:`${ok} supprimé(s) \u2014 récupérable dans la Corbeille`, err.length?"err":"ok");
+  SEL={}; scanImport();
+}
+async function showTrash(){
+  const box=$("#import-list");
+  let t=[]; try{ t=await (await fetch("/api/system/trash")).json(); }catch(e){}
+  let h=`<div class="section-h" style="margin:0 0 10px">Corbeille système<span class="sh-sub"> \u2014 supprimés, récupérables</span></div>`;
+  h+=`<div style="margin:0 0 14px"><button class="btn sm ghost" onclick="scanImport()">\u2190 Retour au scan</button></div>`;
+  if(!t.length){ h+=`<div class="empty" style="padding:24px"><b>Corbeille vide</b></div>`; box.innerHTML=h; return; }
+  const TY={"cron":"\u23f0 cron","systemd-service":"\u2699\ufe0f service","systemd-timer":"\u2699\ufe0f timer","systemd-path":"\ud83d\udc40 .path","inotify-proc":"\ud83d\udc40 inotify"};
+  h+=t.map(e=>{
+    const E=JSON.stringify(e).replace(/'/g,"&#39;");
+    return `<div class="imp-item">
+      <div class="imp-flow"><span class="imp-eng">${TY[e.type]||esc(e.type)}</span><span class="p">${esc(e.name||e.target||"")}</span>${e.schedule?`<span class="p">${esc(e.schedule)}</span>`:""}</div>
+      <div class="imp-meta"><span>supprimé : ${esc(e.ts)}</span><span class="imp-file">${esc((e.file||"").split("/").pop())}</span></div>
+      <div class="imp-actions">${e.restorable?`<button class="btn sm pri" onclick='restoreSys(${E})'>Restaurer</button>`:'<span class="hint">non restaurable (process vivant)</span>'}</div>
+    </div>`;
+  }).join("");
+  box.innerHTML=h;
+}
+async function restoreSys(e){
+  const r=await fetch("/api/system/restore",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:[e]})});
+  if(!r.ok) return toast(await r.text(),"err");
+  const res=await r.json(), ok=res[0]&&res[0].state==="restored";
+  toast(ok?"Restauré sur le système":((res[0]&&res[0].error)||"Échec"),ok?"ok":"err");
+  showTrash();
+}
 function importSys(it){
   closeImport(); openEditor();
   $("#mtitle").textContent="Importer un job";
