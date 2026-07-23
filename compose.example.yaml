@@ -1,68 +1,56 @@
-# SyncBridge — deploy from the PRE-BUILT image (no local build needed).
+# SyncBridge — image PRÉ-BUILDÉE (aucun build local). Variante « LECTURE SEULE » :
+# SyncBridge VOIT tes cron/systemd/inotify mais NE MODIFIE PAS ton système hôte.
+# Pour lui permettre de désactiver/écrire des cron sur l'hôte, prends plutôt
+# compose.example.system.yaml.
 #
-# Quick start:
+# Démarrage :
 #   1. cp .env.example .env
 #   2. docker compose -f compose.example.yaml up -d
-#   3. open http://<server-ip>:8788
-# The image below is the official published one — pull it as-is. If you fork and
-# republish under your own name, change the owner in the image: line.
+#   3. ouvre http://<ip-serveur>:8788
+#      → 1er lancement : l'UI te demande de CRÉER un compte (identifiant + mot de passe).
 #
-# Every volume below is a bind mount. Keep only the lines you actually need —
-# the only REQUIRED one is the config volume (persists your jobs).
+# Chaque volume est un bind mount ; garde uniquement ceux dont tu as besoin.
+# Le seul REQUIS est le volume de config (il persiste tes jobs + ton compte).
 services:
   syncbridge:
     image: ghcr.io/godsquantum/syncbridge:latest
     container_name: syncbridge
-    # root lets SyncBridge read root-owned files (faithful system backups) and,
-    # if you enable the system backend later, manage host cron/systemd. If you
-    # only do plain user-owned syncs, you can drop this and run rootless.
+    # root : permet de lire les fichiers root (backups système fidèles). Si tu ne fais
+    # que des syncs de fichiers utilisateur, tu peux retirer cette ligne (rootless).
     user: "0:0"
     environment:
       - TZ=${TZ:-Europe/Paris}
-      - SB_DATA=/config              # where jobs.json + config live (do not change)
-      - SB_UID=${SB_UID:-1000}       # owner forced on app files, even if container is root
+      - SB_DATA=/config              # jobs.json + auth.json + config (ne pas changer)
+      - SB_UID=${SB_UID:-1000}       # propriétaire imposé aux fichiers de l'app
       - SB_GID=${SB_GID:-1000}
       - SB_IMPORT_PATHS=/import/scripts:/import/crontab
+      # Auth : par défaut, compte créé au 1er lancement via l'UI (register).
+      # Alternative : imposer le compte par variables d'env (décommente) —
+      # dans ce cas, pas de register, on se connecte directement avec ces identifiants.
+      #- SYNCBRIDGE_USER=${SYNCBRIDGE_USER}
+      #- SYNCBRIDGE_PASSWORD=${SYNCBRIDGE_PASSWORD}
     ports:
-      - 8788:8787                    # change ONLY the left number if 8788 is taken
+      - 8788:8787                    # change SEULEMENT le nombre de gauche si 8788 est pris
     volumes:
-      # ─── REQUIRED ──────────────────────────────────────────────────────────
-      # App state (jobs.json + config). Back this folder up = back up everything.
-      - ./data:/config
+      # ─── REQUIS ────────────────────────────────────────────────────────────
+      - ./data:/config               # état de l'app (sauvegarde ce dossier = tout sauvegardé)
 
-      # ─── YOUR DATA (map what you want to sync / the scripts you want to run) ──
-      # Map any host folders you sync between, or that your scripts touch.
-      # Example: expose your whole home, or be surgical and map only what's needed.
+      # ─── TES DONNÉES (ce que tu synchronises / ce que tes scripts touchent) ──
       - /home/youruser:/home/youruser
-      # Scripts to import/trigger (read-only is enough to execute them):
-      - /home/youruser/scripts:/import/scripts:ro
+      - /home/youruser/scripts:/import/scripts:ro   # scripts à importer/déclencher
 
-      # ─── SYSTEM MONITOR — read-only "nothing escapes me" (Module 4) ──────────
-      # Lets SyncBridge SHOW every host cron/systemd/inotify trigger. All :ro,
-      # zero risk. Drop any line you don't care about.
+      # ─── MONITEUR SYSTÈME — lecture seule « rien ne m'échappe » (Module 4) ───
+      # Affiche tous les cron/systemd/inotify de l'hôte. Tout en :ro, zéro risque.
       - /etc/crontab:/host/etc/crontab:ro
       - /etc/cron.d:/host/etc/cron.d:ro
       - /var/spool/cron/crontabs:/host/crontabs:ro
       - /etc/systemd/system:/host/etc/systemd/system:ro
       - /proc:/host/proc:ro
 
-      # ─── OPTIONAL: Docker jobs (Module 1: prune, compose pull, docker exec) ──
-      # Only add this if you want SyncBridge-backend command jobs to drive Docker.
+      # ─── OPTIONNEL : jobs Docker (prune, compose pull, docker exec…) ─────────
       - /var/run/docker.sock:/var/run/docker.sock
 
-      # ─── OPTIONAL: "System" backend WRITE (jobs survive a Docker outage) ─────
-      # To let SyncBridge write REAL host cron entries, mount cron.d read-write:
-      #   - /etc/cron.d:/host/etc/cron.d:rw
-      # For the systemd variant (.service/.timer/.path) SyncBridge also needs to
-      # run `systemctl` against the host — that requires a privileged container
-      # and the systemd/dbus socket. Enable only if you understand the tradeoff:
-      #   - /etc/systemd/system:/host/etc/systemd/system:rw
-      #   - /run/systemd:/run/systemd
-      #   - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
-      # (and add `privileged: true` at the service level).
-
-      # ─── OPTIONAL: NFS-nested mounts (see remote NAS mounts inside /mnt) ─────
-      # rshared propagation exposes mounts nested under /mnt to the container.
+      # ─── OPTIONNEL : montages NFS imbriqués sous /mnt ───────────────────────
       - type: bind
         source: /mnt
         target: /mnt
