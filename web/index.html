@@ -184,6 +184,8 @@
     padding:11px 13px;font-size:12px;line-height:1.55;margin:0 0 14px}
   .sys-warn code{background:rgba(0,0,0,.35);padding:1px 5px;border-radius:4px;font-family:var(--mono);font-size:11px;color:var(--amber)}
   .imp-item.sys{border-color:#3a2a2e;background:#140f11}
+  .imp-sel{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--dim);font-family:var(--mono);margin-right:4px;cursor:pointer}
+  .imp-sel input{cursor:pointer}
 
   /* ---------- dual pane ---------- */
   .dual{display:grid;grid-template-columns:1fr 44px 1fr;gap:0;align-items:stretch;margin-bottom:8px}
@@ -552,7 +554,13 @@
       </div>
       <div id="import-list"><div class="hint">Scan en cours…</div></div>
     </div>
+    <div id="imp-batch" style="display:none;align-items:center;gap:12px;padding:10px 24px;border-top:1px solid #6b2f38;background:#140f11">
+      <span style="color:var(--red);font-size:13px"><b id="imp-batch-n">0</b> sélectionné(s)</span>
+      <span class="flex"></span>
+      <button class="btn sm" style="color:var(--red);border-color:#6b2f38" onclick="delSelection()">Supprimer la sélection</button>
+    </div>
     <div class="modal-f">
+      <button class="btn ghost" onclick="showTrash()">🗑 Corbeille</button>
       <button class="btn ghost" onclick="scanImport()">↻ Rescanner</button>
       <button class="btn pri" onclick="closeImport()">Fermer</button>
     </div>
