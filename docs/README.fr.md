@@ -36,14 +36,14 @@ SyncBridge refuse de te laisser te tirer une balle dans le pied :
 
 ```bash
 mkdir syncbridge && cd syncbridge
-curl -O https://raw.githubusercontent.com/GodsQuantum/syncbridge/main/compose.example.yaml
-curl -O https://raw.githubusercontent.com/GodsQuantum/syncbridge/main/.env.example
+curl -O https://raw.githubusercontent.com/GodsQuantum/SyncBridge/main/compose.example.yaml
+curl -O https://raw.githubusercontent.com/GodsQuantum/SyncBridge/main/.env.example
 cp .env.example .env
 # ajuste les volumes dans compose.example.yaml à tes chemins, puis :
 docker compose -f compose.example.yaml up -d
 ```
 
-Ouvre `http://<ip-serveur>:8788`. Tes jobs vivent dans `./data/jobs.json` — sauvegarde ce dossier et tu as tout sauvegardé. L'image est multi-arch (amd64 + arm64) sur `ghcr.io/GodsQuantum/syncbridge:latest`.
+Ouvre `http://<ip-serveur>:8788`. Tes jobs vivent dans `./data/jobs.json` — sauvegarde ce dossier et tu as tout sauvegardé. L'image est multi-arch (amd64 + arm64) sur `ghcr.io/godsquantum/syncbridge:latest`.
 
 ### Pas à pas
 

@@ -11,7 +11,7 @@
 # the only REQUIRED one is the config volume (persists your jobs).
 services:
   syncbridge:
-    image: ghcr.io/GodsQuantum/syncbridge:latest
+    image: ghcr.io/godsquantum/syncbridge:latest
     container_name: syncbridge
     # root lets SyncBridge read root-owned files (faithful system backups) and,
     # if you enable the system backend later, manage host cron/systemd. If you
