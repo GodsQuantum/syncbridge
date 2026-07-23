@@ -154,8 +154,30 @@ async function refreshLive(){
   });
 }
 
+let FILTER="all";
+const TABS=[
+  {id:"all",label:"Tous",match:j=>true},
+  {id:"sync",label:"Sync",match:j=>j.kind!=="command"},
+  {id:"command",label:"Commandes",match:j=>j.kind==="command"},
+  {id:"cron",label:"⏰ Cron",match:j=>j.trigger==="cron"},
+  {id:"watch",label:"👀 Watch",match:j=>j.trigger==="watch"},
+  {id:"manual",label:"🖐 Manuel",match:j=>j.trigger==="manual"},
+  {id:"disabled",label:"Désactivés",match:j=>!!j.disabled}
+];
+function setFilter(id){FILTER=id;render();}
+function renderTabs(){
+  const box=$("#tabs"); if(!box)return;
+  box.innerHTML=TABS.map(t=>{
+    const n=JOBS.filter(t.match).length;
+    return `<span class="tab ${FILTER===t.id?'sel':''}" onclick="setFilter('${t.id}')"><span class="tlbl">${t.label}</span><span class="cnt">${n}</span></span>`;
+  }).join("");
+}
 function render(){
+  renderTabs();
   const box=$("#jobs");
+  const q=($("#search")?$("#search").value:"").toLowerCase().trim();
+  const tab=TABS.find(t=>t.id===FILTER)||TABS[0];
+  const list=JOBS.filter(tab.match).filter(j=>!q||[j.name,j.command,j.source,j.dest].some(v=>(v||"").toLowerCase().includes(q)));
   if(!JOBS.length){
     box.innerHTML=`<div class="empty"><div class="big">⇄</div>
       <b>Aucun job pour l'instant</b>
@@ -163,7 +185,8 @@ function render(){
       <button class="btn pri" onclick="openEditor()">Créer un job</button></div>`;
     return;
   }
-  box.innerHTML=JOBS.map(j=>{
+  if(!list.length){ box.innerHTML=`<div class="empty" style="padding:40px"><b>Aucun job dans ce filtre</b><p style="font-size:12px">Change d'onglet ou crée un job.</p></div>`; return; }
+  box.innerHTML=list.map(j=>{
     const st=j.lastStat||"", dot=st==="running"?"running":st==="ok"?"ok":st==="error"?"error":"";
     const isCmd=j.kind==="command";
     const mt={add:"add",mirror:"mirror",move:"move"}[j.mode];
@@ -271,36 +294,78 @@ function openImport(){ $("#import-scrim").classList.add("open"); scanImport(); }
 function closeImport(){ $("#import-scrim").classList.remove("open"); }
 async function scanImport(){
   const box=$("#import-list");
-  box.innerHTML='<div class="hint">Scan en cours…</div>';
-  let d;
-  try{ d=await (await fetch("/api/import/scan")).json(); }
-  catch(e){ box.innerHTML='<div class="hint" style="color:var(--red)">Erreur de scan</div>'; return; }
-  const found=d.found||[];
-  if(!found.length){
+  box.innerHTML='<div class="hint">Scan du système en cours…</div>';
+  let sys={items:[]}, imp={found:[]};
+  try{ sys=await (await fetch("/api/system/scan")).json(); }catch(e){}
+  try{ imp=await (await fetch("/api/import/scan")).json(); }catch(e){}
+  const items=sys.items||[], found=imp.found||[];
+  if(!items.length && !found.length){
     box.innerHTML=`<div class="empty" style="padding:32px">
-      <b>Aucune copie rsync/rclone trouvée</b>
-      <p style="font-size:12px">Chemins scannés : ${(d.paths||[]).map(esc).join(", ")||"aucun"}.
-      Vérifie que tes scripts sont montés dans le conteneur (voir compose).</p></div>`;
+      <b>Rien détecté sur le système</b>
+      <p style="font-size:12px">Aucune tâche cron, unité systemd ou watcher inotify trouvé. Vérifie que les montages /host/… et /import/… sont présents (voir compose).</p></div>`;
     return;
   }
-  box.innerHTML=found.map((f,i)=>{
-    const modeGuess=/--delete/.test(f.line)||f.verb==="sync"?"miroir":f.verb==="move"?"déplacement":"accumulation";
-    return `<div class="imp-item ${f.local?'':'warn'}">
-      <div class="imp-flow">
-        <span class="imp-eng">${f.engine}${f.verb?" "+f.verb:""}</span>
-        <span class="p">${esc(f.source)}</span><span class="arrow">→</span><span class="p">${esc(f.dest)}</span>
-      </div>
-      <div class="imp-meta">
-        <span>mode probable : <b>${modeGuess}</b></span>
-        ${f.cron?`<span>cron : <b>${esc(f.cron)}</b></span>`:'<span>pas de planning détecté</span>'}
-        <span class="imp-file">${esc(f.file.split("/").pop())}</span>
-      </div>
-      ${f.warning?`<div class="imp-warn">⚠ ${esc(f.warning)}</div>`:''}
-      <div class="imp-actions">
-        <button class="btn sm ${f.local?'pri':''}" onclick='importOne(${JSON.stringify(f).replace(/'/g,"&#39;")},"${modeGuess}")'>Importer ce job</button>
-      </div>
-    </div>`;
-  }).join("");
+  const TYPE={"cron":["⏰","cron"],"systemd-service":["⚙️","systemd service"],"systemd-timer":["⚙️","systemd timer"],"systemd-path":["👀","systemd .path"],"inotify-proc":["👀","inotify"]};
+  let html="";
+  if(items.length){
+    html+=`<div class="hint" style="margin:0 0 12px"><b>${items.length}</b> déclencheur(s) système détecté(s) — crontabs, systemd et inotify. Importe ceux à gérer dans SyncBridge (créés désactivés, ton système n'est pas touché).</div>`;
+    html+=items.map(it=>{
+      const t=TYPE[it.type]||["•",it.type];
+      const managed=it.managed?'<div class="imp-warn" style="color:var(--green)">✓ déjà géré par SyncBridge</div>':'';
+      return `<div class="imp-item">
+        <div class="imp-flow">
+          <span class="imp-eng">${t[0]} ${t[1]}</span>
+          <span class="p">${esc(it.name||"")}</span>
+          ${it.schedule?`<span class="p">${esc(it.schedule)}</span>`:""}
+        </div>
+        <div class="imp-meta">
+          ${it.target?`<span>→ <b>${esc(it.target)}</b></span>`:'<span>commande non extraite (à compléter)</span>'}
+          <span class="imp-file">${esc((it.file||"").split("/").pop())}</span>
+        </div>
+        ${managed}
+        <div class="imp-actions">
+          <button class="btn sm pri" onclick='importSys(${JSON.stringify(it).replace(/'/g,"&#39;")})'>Importer</button>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  if(found.length){
+    html+=`<div class="section-h" style="margin:22px 0 12px">Copies rsync / rclone détectées dans tes scripts</div>`;
+    html+=found.map((f,i)=>{
+      const modeGuess=/--delete/.test(f.line)||f.verb==="sync"?"miroir":f.verb==="move"?"déplacement":"accumulation";
+      return `<div class="imp-item ${f.local?'':'warn'}">
+        <div class="imp-flow">
+          <span class="imp-eng">${f.engine}${f.verb?" "+f.verb:""}</span>
+          <span class="p">${esc(f.source)}</span><span class="arrow">→</span><span class="p">${esc(f.dest)}</span>
+        </div>
+        <div class="imp-meta">
+          <span>mode probable : <b>${modeGuess}</b></span>
+          ${f.cron?`<span>cron : <b>${esc(f.cron)}</b></span>`:'<span>pas de planning détecté</span>'}
+          <span class="imp-file">${esc(f.file.split("/").pop())}</span>
+        </div>
+        ${f.warning?`<div class="imp-warn">⚠ ${esc(f.warning)}</div>`:''}
+        <div class="imp-actions">
+          <button class="btn sm ${f.local?'pri':''}" onclick='importOne(${JSON.stringify(f).replace(/'/g,"&#39;")},"${modeGuess}")'>Importer comme synchro</button>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  box.innerHTML=html;
+}
+function importSys(it){
+  closeImport(); openEditor();
+  $("#mtitle").textContent="Importer un job";
+  setKind("command");
+  $("#f-name").value=it.name||("Import "+(it.type||"job"));
+  $("#f-command").value=it.target||"";
+  if(it.type==="cron" && it.schedule && it.schedule.trim().split(/\s+/).length===5){
+    setTrig("cron"); $("#f-cron").value=it.schedule; updateCronLive(); highlightCronChip();
+  }else if(it.type==="systemd-path"||it.type==="inotify-proc"){
+    setTrig("watch"); $("#f-source").value=it.schedule||""; $("#f-watchsrc").value=it.schedule||"";
+  }else{
+    setTrig("manual");
+  }
+  toast("Vérifie puis enregistre. Le job sera créé désactivé — ton système reste inchangé.","ok");
 }
 async function importOne(f,mode){
   // ouvre l'éditeur pré-rempli plutôt que créer aveuglément -> tu vérifies
@@ -320,7 +385,7 @@ async function importOne(f,mode){
 // ---- editor ----
 function openEditor(){
   $("#mtitle").textContent="Nouveau job";
-  ["f-id","f-name","f-command","f-source","f-dest","f-cron","f-watchglob","f-debounce","f-pollsec","f-timeout","f-bwlimit","f-maxdel","f-exclude","f-backupkeep"].forEach(i=>$("#"+i).value="");
+  ["f-id","f-name","f-command","f-source","f-dest","f-cron","f-watchglob","f-watchsrc","f-debounce","f-pollsec","f-timeout","f-bwlimit","f-maxdel","f-exclude","f-backupkeep"].forEach(i=>$("#"+i).value="");
   $("#src-mini").textContent="—"; $("#dst-mini").textContent="—";
   $("#f-engine").value="rsync"; $("#f-compare").value="time"; $("#f-watchmode").value="hybrid";
   setKind("sync"); setBackend("syncbridge"); setMode("add"); setTrig("manual"); sw={backup:false,skipNew:false,sysBackup:false}; syncSw();
@@ -337,7 +402,7 @@ function edit(id){
   $("#src-mini").textContent=j.source; $("#dst-mini").textContent=j.dest;
   $("#f-engine").value=j.engine; $("#f-compare").value=j.compare;
   $("#f-cron").value=j.cron||""; $("#f-bwlimit").value=j.bwlimit||"";
-  $("#f-watchglob").value=j.watchGlob||""; $("#f-watchmode").value=j.watchMode||"hybrid";
+  $("#f-watchglob").value=j.watchGlob||""; $("#f-watchmode").value=j.watchMode||"hybrid"; $("#f-watchsrc").value=j.source||"";
   $("#f-debounce").value=j.debounce||""; $("#f-pollsec").value=j.pollSec||"";
   $("#f-timeout").value=j.timeout||"";
   $("#f-maxdel").value=j.maxDel||""; $("#f-exclude").value=j.exclude||"";
@@ -357,14 +422,17 @@ function setKind(k){$("#f-kind").value=k;
   ["sync","command"].forEach(x=>$("#k-"+x).classList.toggle("sel",x===k));
   const cmd=k==="command";
   $("#cmd-only").style.display=cmd?"block":"none";
-  document.querySelectorAll(".sync-only").forEach(el=>el.style.display=cmd?"none":"");}
+  document.querySelectorAll(".sync-only").forEach(el=>el.style.display=cmd?"none":"");
+  updateWatchSrc();}
 function setBackend(b){$("#f-backend").value=b;
   ["syncbridge","system"].forEach(x=>$("#b-"+x).classList.toggle("sel",x===b));}
+function updateWatchSrc(){const el=$("#watch-src-wrap"); if(el) el.style.display=($("#f-kind").value==="command"&&$("#f-trigger").value==="watch")?"block":"none";}
 function setTrig(t){$("#f-trigger").value=t;
   ["manual","cron","watch"].forEach(x=>$("#t-"+x).classList.toggle("sel",x===t));
   $("#cron-wrap").style.display=t==="cron"?"block":"none";
   $("#watch-wrap").style.display=t==="watch"?"block":"none";
-  if(t==="cron"){renderCronPresets();updateCronLive();highlightCronChip();}}
+  if(t==="cron"){renderCronPresets();updateCronLive();highlightCronChip();}
+  updateWatchSrc();}
 function toggleAdv(){$("#adv").classList.toggle("open");$("#adv-toggle").classList.toggle("open");}
 function toggleSw(k){sw[k]=!sw[k];syncSw();}
 function syncSw(){$("#sw-backup").classList.toggle("on",sw.backup);$("#sw-skipnew").classList.toggle("on",sw.skipNew);
@@ -407,6 +475,7 @@ async function saveJob(){
     backupKeep:parseInt($("#f-backupkeep").value)||0,
     backup:sw.backup,skipNew:sw.skipNew,sysBackup:sw.sysBackup,exclude:$("#f-exclude").value.trim()
   };
+  if(kind==="command"&&p.trigger==="watch") p.source=$("#f-watchsrc").value.trim();
   if(!p.name)return toast("Nom requis","err");
   if(kind==="command"){ if(!p.command)return toast("Renseigne la commande à exécuter","err"); }
   else if(!p.source||!p.dest)return toast("Source et destination requises","err");
@@ -506,7 +575,7 @@ const I18N_EN = {
   "Exclusions":"Exclusions",
   "Motifs à ignorer, séparés par des virgules. Ex. fichiers système NAS (@eaDir), temporaires (*.tmp).":"Patterns to ignore, comma-separated. E.g. NAS system files (<b>@eaDir</b>), temp files (<b>*.tmp</b>).",
   "Annuler":"Cancel","Enregistrer le job":"Save job",
-  "Importer des copies existantes":"Import existing copies",
+  "Importer depuis le système":"Import from your system",
   "SyncBridge scanne tes scripts et crontabs (montés en lecture seule) pour trouver les commandes rsync et rclone. Chaque copie trouvée peut être importée comme job (créé désactivé — tu vérifies puis actives). L'original n'est pas touché.":"SyncBridge scans your scripts and crontabs (mounted read-only) to find <b>rsync</b> and <b>rclone</b> commands. Each copy found can be imported as a job (created <b>disabled</b> — review, then enable). The original is untouched.",
   "↻ Rescanner":"↻ Rescan","Fermer":"Close","Créer un job":"Create a job",
   "Aucun job pour l'instant":"No jobs yet",
@@ -524,7 +593,7 @@ let LANG = localStorage.getItem('sb_lang') || 'en';
 const _norm = s => (s||'').replace(/\s+/g,' ').trim();
 const _plain = v => v.replace(/<[^>]+>/g,'');
 // liste blanche : uniquement des porteurs de texte, jamais des conteneurs (pas de casse de structure)
-const I18N_SEL = 'label,.ct,.cd,.hint,option,.tag,.lab,.empty b,.empty p,h2,.section-h,.switch-txt b,.switch-txt span,.cron-live';
+const I18N_SEL = 'label,.ct,.cd,.hint,option,.tag,.lab,.empty b,.empty p,h2,.section-h,.switch-txt b,.switch-txt span,.cron-live,.tlbl';
 function _trEl(el){ const v=I18N_EN[_norm(el.textContent)]; if(v!==undefined) el.innerHTML=v; }
 function _trBtn(b){ b.childNodes.forEach(n=>{ if(n.nodeType===3){ const k=_norm(n.nodeValue); if(k){ const v=I18N_EN[k]; if(v) n.nodeValue=' '+_plain(v)+' '; } } }); }
 function _trAttrs(el){ ['placeholder','title'].forEach(a=>{ const val=el.getAttribute&&el.getAttribute(a); if(val){ const v=I18N_EN[_norm(val)]; if(v) el.setAttribute(a,_plain(v)); } }); }
