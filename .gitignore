@@ -1,0 +1,17 @@
+# binaires
+/syncbridge
+*.exe
+# données runtime (jamais dans le dépôt : elles vivent dans App_Data)
+/config/
+jobs.json
+*.tmp
+# archives / divers
+*.zip
+.DS_Store
+# artefacts NFS transitoires + tests locaux
+.nfs*
+.wtest
+# fichiers legacy / privés (ne jamais publier)
+RESTAURATION.md
+compose-snippet.yaml
+data/
