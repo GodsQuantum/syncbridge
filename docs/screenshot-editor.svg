@@ -1,0 +1,46 @@
+<svg width="860" height="600" viewBox="0 0 860 600" xmlns="http://www.w3.org/2000/svg" font-family="Inter,Segoe UI,sans-serif">
+<rect width="860" height="600" fill="#080b12"/>
+<rect x="60" y="24" width="740" height="552" rx="13" fill="#151b24" stroke="#263041"/>
+<text x="90" y="62" fill="#e8eef6" font-size="17" font-weight="650">New job</text>
+<line x1="60" y1="80" x2="800" y2="80" stroke="#263041"/>
+<text x="90" y="104" fill="#8b9bb0" font-size="11" font-family="monospace" letter-spacing="0.5">NAME</text>
+<rect x="90" y="112" width="680" height="34" rx="7" fill="#0d1117" stroke="#263041"/><text x="102" y="134" fill="#e8eef6" font-size="12" font-family="monospace">Transcribe voice notes</text>
+<text x="90" y="172" fill="#8b9bb0" font-size="11" font-family="monospace" letter-spacing="0.5">JOB TYPE</text>
+<rect x="90" y="180" width="333.0" height="70" rx="8" fill="#0d1117" stroke="#263041"/>
+<text x="103" y="202" fill="#e8eef6" font-size="13.5" font-weight="600">Sync</text>
+<text x="103" y="220" fill="#8b9bb0" font-size="10.5">Copy a folder A → B (rsync/rclone).</text>
+<text x="103" y="233" fill="#8b9bb0" font-size="10.5">The original use case.</text>
+<rect x="437.0" y="180" width="333.0" height="70" rx="8" fill="#0f1c22" stroke="#3dd7cf"/>
+<text x="450.0" y="202" fill="#3dd7cf" font-size="13.5" font-weight="600">Command / script</text>
+<text x="450.0" y="220" fill="#8b9bb0" font-size="10.5">Runs a command or a script. Trigger</text>
+<text x="450.0" y="233" fill="#8b9bb0" font-size="10.5">it manually, on cron, or on a</text>
+<text x="450.0" y="246" fill="#8b9bb0" font-size="10.5">folder change.</text>
+<circle cx="756.0" cy="194" r="6" fill="#3dd7cf"/>
+<text x="90" y="278" fill="#8b9bb0" font-size="11" font-family="monospace" letter-spacing="0.5">EXECUTION</text>
+<rect x="90" y="286" width="333.0" height="70" rx="8" fill="#0f1c22" stroke="#3dd7cf"/>
+<text x="103" y="308" fill="#3dd7cf" font-size="13.5" font-weight="600">SyncBridge backend</text>
+<text x="103" y="326" fill="#8b9bb0" font-size="10.5">Runs the job itself: live logs,</text>
+<text x="103" y="339" fill="#8b9bb0" font-size="10.5">kill, anti-overlap lock. Fully</text>
+<text x="103" y="352" fill="#8b9bb0" font-size="10.5">visible.</text>
+<circle cx="409.0" cy="300" r="6" fill="#3dd7cf"/>
+<rect x="437.0" y="286" width="333.0" height="70" rx="8" fill="#0d1117" stroke="#263041"/>
+<text x="450.0" y="308" fill="#e8eef6" font-size="13.5" font-weight="600">System backend</text>
+<text x="450.0" y="326" fill="#8b9bb0" font-size="10.5">Writes a real host cron/systemd</text>
+<text x="450.0" y="339" fill="#8b9bb0" font-size="10.5">unit. Survives a Docker outage.</text>
+<text x="90" y="384" fill="#8b9bb0" font-size="11" font-family="monospace" letter-spacing="0.5">FREQUENCY</text>
+<rect x="90.0" y="392" width="220.0" height="64" rx="8" fill="#0d1117" stroke="#263041"/>
+<text x="102.0" y="414" fill="#e8eef6" font-size="13.5" font-weight="600">Manual</text>
+<text x="102.0" y="434" fill="#8b9bb0" font-size="10.5">Runs only when you click Run.</text>
+<rect x="320.0" y="392" width="220.0" height="64" rx="8" fill="#0d1117" stroke="#263041"/>
+<text x="332.0" y="414" fill="#e8eef6" font-size="13.5" font-weight="600">Scheduled</text>
+<text x="332.0" y="434" fill="#8b9bb0" font-size="10.5">Runs at a fixed time (cron).</text>
+<rect x="550.0" y="392" width="220.0" height="64" rx="8" fill="#0f1c22" stroke="#3dd7cf"/>
+<text x="562.0" y="414" fill="#3dd7cf" font-size="13.5" font-weight="600">Watch</text>
+<text x="562.0" y="434" fill="#8b9bb0" font-size="10.5">Fires when a folder changes.</text>
+<circle cx="756.0" cy="406" r="6" fill="#3dd7cf"/>
+<rect x="90" y="470" width="333.0" height="34" rx="7" fill="#0d1117" stroke="#263041"/><text x="102" y="492" fill="#8b9bb0" font-size="12" font-family="monospace">*.m4a, *.mp3</text>
+<rect x="437.0" y="470" width="333.0" height="34" rx="7" fill="#0d1117" stroke="#263041"/><text x="449.0" y="492" fill="#8b9bb0" font-size="12" font-family="monospace">Hybrid: events + scan (NFS)</text>
+<line x1="60" y1="536" x2="800" y2="536" stroke="#263041"/>
+<rect x="600" y="548" width="90" height="32" rx="7" fill="none" stroke="#263041"/><text x="645" y="569" fill="#8b9bb0" font-size="12" text-anchor="middle">Cancel</text>
+<rect x="698" y="548" width="102" height="32" rx="7" fill="#3dd7cf"/><text x="749" y="569" fill="#042927" font-size="12" font-weight="700" text-anchor="middle">Save job</text>
+</svg>
