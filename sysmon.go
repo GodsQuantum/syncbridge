@@ -20,6 +20,7 @@ type SysItem struct {
 	Target   string `json:"target"`   // commande / ExecStart / script
 	File     string `json:"file"`     // fichier source
 	Managed  bool   `json:"managed"`  // true si posé par SyncBridge (marqueur)
+	Class    string `json:"class"`    // custom | system (heuristique : géré par toi vs OS/paquets)
 }
 
 // marqueur inséré par SyncBridge dans les artefacts qu'il écrit (backend=system).
@@ -45,6 +46,9 @@ func apiSystemScan(w http.ResponseWriter, r *http.Request) {
 	items = append(items, scanCron()...)
 	items = append(items, scanSystemd()...)
 	items = append(items, scanInotifyProcs()...)
+	for i := range items {
+		items[i].Class = classifySys(items[i])
+	}
 	writeJSON(w, map[string]any{
 		"items":        items,
 		"cronPaths":    sysCronPaths(),
@@ -181,4 +185,32 @@ func scanInotifyProcs() []SysItem {
 			Schedule: "inotifywait", Target: strings.Join(args, " "), File: cf})
 	}
 	return out
+}
+
+// classifySys : "custom" (tes scripts / cron perso / inotify — sûrs à gérer) vs
+// "system" (tâches OS/paquets : run-parts, e2scrub, man-db… — à ne toucher qu'à tes
+// risques). Les signaux système priment ; sinon signaux custom ; défaut prudent = system.
+func classifySys(it SysItem) string {
+	t := strings.ToLower(it.Target + " " + it.Schedule + " " + it.File + " " + it.Name)
+	sysHints := []string{
+		"run-parts", "/etc/cron.hourly", "/etc/cron.daily", "/etc/cron.weekly", "/etc/cron.monthly",
+		"e2scrub", "/usr/lib/", "/lib/systemd", "systemd-tmpfiles", "man-db", "apt-compat", "apt.systemd",
+		"dpkg", "logrotate", "mlocate", "plocate", "updatedb", "fstrim", "sysstat", "debian-sa1",
+		"popularity-contest", "phpsessionclean", "service_mode=", "/run/systemd",
+	}
+	for _, h := range sysHints {
+		if strings.Contains(t, h) {
+			return "system"
+		}
+	}
+	custHints := []string{
+		".sh", ".py", ".bash", "/home/", "/mnt/", "/opt/", "/srv/", "/root/", "/import/",
+		"inotifywait", "docker", "rsync", "rclone", "cronmaster",
+	}
+	for _, h := range custHints {
+		if strings.Contains(t, h) {
+			return "custom"
+		}
+	}
+	return "system"
 }
