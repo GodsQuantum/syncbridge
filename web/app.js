@@ -57,11 +57,12 @@ function cronHuman(c){
 function cronValid(c){return c.trim().split(/\s+/).length===5;}
 
 async function boot(){
-  const e=await (await fetch("/api/engines")).json();
-  $("#eng-list").innerHTML =
-    `<span class="${e.rsync?'on':'off'}">rsync</span> · <span class="${e.rclone?'on':'off'}">rclone</span>`;
-  const opt=$("#f-engine");
-  if(!e.rclone) opt.querySelector('[value=rclone]').disabled=true;
+  // Dispo des moteurs : sert juste à griser rclone dans l'éditeur s'il n'est pas installé.
+  try{
+    const e=await (await fetch("/api/engines")).json();
+    const opt=$("#f-engine");
+    if(!e.rclone && opt){ const o=opt.querySelector('[value=rclone]'); if(o) o.disabled=true; }
+  }catch(e){}
   await load();
   setInterval(refreshLive, 2000); // suivi live toutes les 2s
 }
@@ -305,52 +306,61 @@ async function scanImport(){
       <p style="font-size:12px">Aucune tâche cron, unité systemd ou watcher inotify trouvé. Vérifie que les montages /host/… et /import/… sont présents (voir compose).</p></div>`;
     return;
   }
-  const TYPE={"cron":["⏰","cron"],"systemd-service":["⚙️","systemd service"],"systemd-timer":["⚙️","systemd timer"],"systemd-path":["👀","systemd .path"],"inotify-proc":["👀","inotify"]};
+  const customs=items.filter(i=>i.class!=="system");
+  const systems=items.filter(i=>i.class==="system");
   let html="";
-  if(items.length){
-    html+=`<div class="hint" style="margin:0 0 12px"><b>${items.length}</b> déclencheur(s) système détecté(s) — crontabs, systemd et inotify. Importe ceux à gérer dans SyncBridge (créés désactivés, ton système n'est pas touché).</div>`;
-    html+=items.map(it=>{
-      const t=TYPE[it.type]||["•",it.type];
-      const managed=it.managed?'<div class="imp-warn" style="color:var(--green)">✓ déjà géré par SyncBridge</div>':'';
-      return `<div class="imp-item">
-        <div class="imp-flow">
-          <span class="imp-eng">${t[0]} ${t[1]}</span>
-          <span class="p">${esc(it.name||"")}</span>
-          ${it.schedule?`<span class="p">${esc(it.schedule)}</span>`:""}
-        </div>
-        <div class="imp-meta">
-          ${it.target?`<span>→ <b>${esc(it.target)}</b></span>`:'<span>commande non extraite (à compléter)</span>'}
-          <span class="imp-file">${esc((it.file||"").split("/").pop())}</span>
-        </div>
-        ${managed}
-        <div class="imp-actions">
-          <button class="btn sm pri" onclick='importSys(${JSON.stringify(it).replace(/'/g,"&#39;")})'>Importer</button>
-        </div>
-      </div>`;
-    }).join("");
+  // 1) Tes déclencheurs (scripts perso, cron perso, inotify) + copies rsync/rclone
+  if(customs.length||found.length){
+    html+=`<div class="section-h" style="margin:0 0 10px">Tes déclencheurs<span class="sh-sub"> — scripts, cron perso, inotify</span></div>`;
+    html+=`<div class="hint" style="margin:0 0 12px">Ceux que tu gères toi-même. Importe-les dans SyncBridge pour les piloter proprement (créés désactivés — ton système n'est pas touché).</div>`;
+    html+=customs.map(it=>renderSysItem(it,false)).join("");
+    html+=found.map(renderFound).join("");
   }
-  if(found.length){
-    html+=`<div class="section-h" style="margin:22px 0 12px">Copies rsync / rclone détectées dans tes scripts</div>`;
-    html+=found.map((f,i)=>{
-      const modeGuess=/--delete/.test(f.line)||f.verb==="sync"?"miroir":f.verb==="move"?"déplacement":"accumulation";
-      return `<div class="imp-item ${f.local?'':'warn'}">
-        <div class="imp-flow">
-          <span class="imp-eng">${f.engine}${f.verb?" "+f.verb:""}</span>
-          <span class="p">${esc(f.source)}</span><span class="arrow">→</span><span class="p">${esc(f.dest)}</span>
-        </div>
-        <div class="imp-meta">
-          <span>mode probable : <b>${modeGuess}</b></span>
-          ${f.cron?`<span>cron : <b>${esc(f.cron)}</b></span>`:'<span>pas de planning détecté</span>'}
-          <span class="imp-file">${esc(f.file.split("/").pop())}</span>
-        </div>
-        ${f.warning?`<div class="imp-warn">⚠ ${esc(f.warning)}</div>`:''}
-        <div class="imp-actions">
-          <button class="btn sm ${f.local?'pri':''}" onclick='importOne(${JSON.stringify(f).replace(/'/g,"&#39;")},"${modeGuess}")'>Importer comme synchro</button>
-        </div>
-      </div>`;
-    }).join("");
+  // 2) Déclencheurs système (OS & paquets) : à ne toucher qu'à ses risques
+  if(systems.length){
+    html+=`<div class="section-h" style="margin:24px 0 10px">Déclencheurs système<span class="sh-sub"> — OS & paquets</span></div>`;
+    html+=`<div class="sys-warn">⚠ Tâches gérées par l'OS et les paquets (ex. <code>run-parts /etc/cron.hourly</code>, <code>e2scrub_all_cron</code>). Pratique pour <b>visualiser</b>, mais à <b>ne modifier qu'à tes risques et périls</b> : les désactiver peut casser des mises à jour, du nettoyage disque ou de la maintenance système.</div>`;
+    html+=systems.map(it=>renderSysItem(it,true)).join("");
   }
   box.innerHTML=html;
+}
+const SYS_TYPE={"cron":["⏰","cron"],"systemd-service":["⚙️","systemd service"],"systemd-timer":["⚙️","systemd timer"],"systemd-path":["👀","systemd .path"],"inotify-proc":["👀","inotify"]};
+function renderSysItem(it,isSys){
+  const t=SYS_TYPE[it.type]||["•",it.type];
+  const managed=it.managed?'<div class="imp-warn" style="color:var(--green)">✓ déjà géré par SyncBridge</div>':'';
+  return `<div class="imp-item ${isSys?'sys':''}">
+    <div class="imp-flow">
+      <span class="imp-eng">${t[0]} ${t[1]}</span>
+      <span class="p">${esc(it.name||"")}</span>
+      ${it.schedule?`<span class="p">${esc(it.schedule)}</span>`:""}
+    </div>
+    <div class="imp-meta">
+      ${it.target?`<span>→ <b>${esc(it.target)}</b></span>`:'<span>commande non extraite (à compléter)</span>'}
+      <span class="imp-file">${esc((it.file||"").split("/").pop())}</span>
+    </div>
+    ${managed}
+    <div class="imp-actions">
+      <button class="btn sm ${isSys?'':'pri'}" onclick='importSys(${JSON.stringify(it).replace(/'/g,"&#39;")})'>Importer${isSys?' (visualiser)':''}</button>
+    </div>
+  </div>`;
+}
+function renderFound(f){
+  const modeGuess=/--delete/.test(f.line)||f.verb==="sync"?"miroir":f.verb==="move"?"déplacement":"accumulation";
+  return `<div class="imp-item ${f.local?'':'warn'}">
+    <div class="imp-flow">
+      <span class="imp-eng">${f.engine}${f.verb?" "+f.verb:""}</span>
+      <span class="p">${esc(f.source)}</span><span class="arrow">→</span><span class="p">${esc(f.dest)}</span>
+    </div>
+    <div class="imp-meta">
+      <span>mode probable : <b>${modeGuess}</b></span>
+      ${f.cron?`<span>cron : <b>${esc(f.cron)}</b></span>`:'<span>pas de planning détecté</span>'}
+      <span class="imp-file">${esc(f.file.split("/").pop())}</span>
+    </div>
+    ${f.warning?`<div class="imp-warn">⚠ ${esc(f.warning)}</div>`:''}
+    <div class="imp-actions">
+      <button class="btn sm ${f.local?'pri':''}" onclick='importOne(${JSON.stringify(f).replace(/'/g,"&#39;")},"${modeGuess}")'>Importer comme synchro</button>
+    </div>
+  </div>`;
 }
 function importSys(it){
   closeImport(); openEditor();
