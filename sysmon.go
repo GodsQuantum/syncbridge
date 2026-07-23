@@ -21,6 +21,7 @@ type SysItem struct {
 	File     string `json:"file"`     // fichier source
 	Managed  bool   `json:"managed"`  // true si posé par SyncBridge (marqueur)
 	Class    string `json:"class"`    // custom | system (heuristique : géré par toi vs OS/paquets)
+	Disabled bool   `json:"disabled"` // true si SyncBridge a désactivé (commenté) ce déclencheur
 }
 
 // marqueur inséré par SyncBridge dans les artefacts qu'il écrit (backend=system).
@@ -75,7 +76,14 @@ func scanCron() []SysItem {
 			}
 			managed := strings.Contains(string(data), sbMarker)
 			for _, line := range strings.Split(string(data), "\n") {
-				if it := parseCronLine(line, f, managed); it != nil {
+				raw := strings.TrimSpace(line)
+				disabled := false
+				if strings.HasPrefix(raw, strings.TrimSpace(sbOff)) { // ligne desactivee par SyncBridge
+					disabled = true
+					raw = strings.TrimSpace(strings.TrimPrefix(raw, strings.TrimSpace(sbOff)))
+				}
+				if it := parseCronLine(raw, f, managed); it != nil {
+					it.Disabled = disabled
 					out = append(out, *it)
 				}
 			}
