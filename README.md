@@ -42,7 +42,8 @@ The rule of the house: **total visibility**. Nothing runs that you can't see. Ev
 - 👀 **File Watcher** — watch a folder, filter by pattern (`*.mp4`), fire an action. **NFS-safe**: hybrid inotify + polling, because inotify alone never sees remote NFS writes.
 - ▶️ **On-Demand Runner** — trigger utility scripts manually, async, with streamed logs and a kill button.
 - 🔁 **rsync / rclone sync** — mirror / accumulate / move, checksum or time compare, bandwidth limit, exclusions, rotating trash, faithful system backup (ACL/xattr).
-- 🔎 **System Monitor** *(read-only)* — scans host crontabs, systemd units (`.service`/`.timer`/`.path`) and stray `inotifywait` processes, so nothing on your box escapes you.
+- 🔎 **System Monitor** — scans host crontabs, systemd units (`.service`/`.timer`/`.path`) and stray `inotifywait` processes, so nothing on your box escapes you. Import splits them into **your triggers** (scripts, personal cron, inotify) vs **system triggers** (OS/packages), and lets you **reversibly disable/re-enable** a host trigger — cron lines are commented with a `#SB-OFF#` marker, systemd units toggled via `systemctl`, **never deleted**. Needs a read-write host mount (see `compose.example.system.yaml`).
+- 🔐 **Login** — a web login in the app's theme. First launch: you create an account (username + password, hashed with **bcrypt**); after that, you log in. Or pin credentials via `SYNCBRIDGE_USER` / `SYNCBRIDGE_PASSWORD`. Since the UI can run scripts on your box, **never expose it without auth** — keep it on your LAN / behind Tailscale or a reverse proxy.
 
 ## 🛡️ Safety first
 
@@ -65,7 +66,9 @@ cp .env.example .env
 docker compose -f compose.example.yaml up -d
 ```
 
-Open `http://<server-ip>:8788` 🌐. Your jobs live in `./data/jobs.json` — back up that folder and you've backed up everything. The image is multi-arch (amd64 + arm64) on `ghcr.io/godsquantum/syncbridge:latest`.
+Open `http://<server-ip>:8788` 🌐. **On first launch the UI asks you to create an account** (or set `SYNCBRIDGE_USER`/`SYNCBRIDGE_PASSWORD` to skip that). Your jobs + account live in `./data` — back up that folder and you've backed up everything. The image is multi-arch (amd64 + arm64) on `ghcr.io/godsquantum/syncbridge:latest`.
+
+Two compose variants ship: **`compose.example.yaml`** (read-only — SyncBridge *sees* your host triggers but never touches them) and **`compose.example.system.yaml`** (mounts host cron read-write so SyncBridge can disable/write host cron). Start with the read-only one.
 
 ### 📋 Step by step
 
@@ -99,6 +102,9 @@ GET        /api/jobs/{id}/stream live logs (SSE)
 POST       /api/jobs/{id}/kill   stop the running job
 GET        /api/system/scan      host triggers detected (read-only)
 GET        /api/import/scan      rsync/rclone commands found in your scripts/crontab
+POST       /api/system/toggle    reversibly disable/re-enable a host trigger
+POST       /api/auth/register    first-run account creation
+POST       /api/auth/login       log in  ·  /api/auth/logout  log out
 ```
 
 ## 🛠️ Development
@@ -109,7 +115,7 @@ go test ./...              # unit tests
 docker build -t syncbridge .
 ```
 
-One Go package, a handful of files (`main.go`, `sysmon.go`, `system_backend.go`, `web/`). Easy to fork. 🍴
+One Go package, a handful of files (`main.go`, `sysmon.go`, `system_backend.go`, `sys_toggle.go`, `auth.go`, `web/`). Easy to fork. 🍴
 
 ## 🗺️ Roadmap
 
