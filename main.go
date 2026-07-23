@@ -837,6 +837,11 @@ func main() {
 	mux.HandleFunc("/api/status", apiStatus)
 	mux.HandleFunc("/api/import/scan", apiImportScan)
 	mux.HandleFunc("/api/system/scan", apiSystemScan)
+	mux.HandleFunc("/api/system/toggle", apiSystemToggle)
+	mux.HandleFunc("/api/auth/status", apiAuthStatus)
+	mux.HandleFunc("/api/auth/register", apiAuthRegister)
+	mux.HandleFunc("/api/auth/login", apiAuthLogin)
+	mux.HandleFunc("/api/auth/logout", apiAuthLogout)
 
 	sub, _ := fs.Sub(webFS, "web")
 	mux.Handle("/", http.FileServer(http.FS(sub)))
@@ -845,7 +850,7 @@ func main() {
 	fmt.Printf("SyncBridge démarré | port interne 8787 | data %s | rsync=%v rclone=%v | %d job(s)\n",
 		dataDir, hasBin("rsync"), hasBin("rclone"), len(jobs))
 	checkRsyncXattr()
-	http.ListenAndServe(addr, mux)
+	http.ListenAndServe(addr, requireAuth(mux))
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
