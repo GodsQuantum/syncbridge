@@ -328,11 +328,23 @@ const SYS_TYPE={"cron":["⏰","cron"],"systemd-service":["⚙️","systemd servi
 function renderSysItem(it,isSys){
   const t=SYS_TYPE[it.type]||["•",it.type];
   const managed=it.managed?'<div class="imp-warn" style="color:var(--green)">✓ déjà géré par SyncBridge</div>':'';
-  return `<div class="imp-item ${isSys?'sys':''}">
+  const J=JSON.stringify(it).replace(/'/g,"&#39;");
+  let sysBtn="";
+  if(!it.managed){
+    if(it.type==="inotify-proc"){
+      sysBtn=`<button class="btn sm dgr" onclick='sysKill(${J})' title="Tuer le process (non réversible)">Arrêter (kill)</button>`;
+    }else{
+      sysBtn = it.disabled
+        ? `<button class="btn sm" style="color:var(--green);border-color:#2b5c42" onclick='sysToggle(${J})'>Réactiver sur le système</button>`
+        : `<button class="btn sm" style="color:var(--amber);border-color:#5b4a26" onclick='sysToggle(${J})'>Désactiver sur le système</button>`;
+    }
+  }
+  const offLbl=it.disabled?' <span class="off-lbl">désactivé (système)</span>':'';
+  return `<div class="imp-item ${isSys?'sys':''}" ${it.disabled?'style="opacity:.72"':''}>
     <div class="imp-flow">
       <span class="imp-eng">${t[0]} ${t[1]}</span>
       <span class="p">${esc(it.name||"")}</span>
-      ${it.schedule?`<span class="p">${esc(it.schedule)}</span>`:""}
+      ${it.schedule?`<span class="p">${esc(it.schedule)}</span>`:""}${offLbl}
     </div>
     <div class="imp-meta">
       ${it.target?`<span>→ <b>${esc(it.target)}</b></span>`:'<span>commande non extraite (à compléter)</span>'}
@@ -340,7 +352,8 @@ function renderSysItem(it,isSys){
     </div>
     ${managed}
     <div class="imp-actions">
-      <button class="btn sm ${isSys?'':'pri'}" onclick='importSys(${JSON.stringify(it).replace(/'/g,"&#39;")})'>Importer${isSys?' (visualiser)':''}</button>
+      <button class="btn sm ${isSys?'':'pri'}" onclick='importSys(${J})'>Importer${isSys?' (visualiser)':''}</button>
+      ${sysBtn}
     </div>
   </div>`;
 }
@@ -362,6 +375,25 @@ function renderFound(f){
     </div>
   </div>`;
 }
+async function sysToggle(it){
+  const disabling=!it.disabled;
+  const msg=disabling
+    ? "Désactiver ce déclencheur sur le SYSTÈME ?\n\nRéversible : la ligne cron est commentée (#SB-OFF#) ou l'unité systemd passée en 'disable'. Tu pourras la réactiver ici."
+    : "Réactiver ce déclencheur sur le système ?";
+  if(!confirm(msg))return;
+  const r=await fetch("/api/system/toggle",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(it)});
+  if(!r.ok)return toast(await r.text(),"err");
+  const d=await r.json();
+  toast(d.state==="disabled"?"Désactivé sur le système":d.state==="enabled"?"Réactivé sur le système":"Fait","ok");
+  scanImport();
+}
+async function sysKill(it){
+  if(!confirm("Arrêter ce process inotify (SIGTERM) ?\n\n⚠ NON réversible : le process est tué. Il repartira au prochain (re)démarrage de son service parent."))return;
+  const r=await fetch("/api/system/toggle",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(it)});
+  if(!r.ok)return toast(await r.text(),"err");
+  toast("Process arrêté","ok"); scanImport();
+}
+async function logout(){ try{ await fetch("/api/auth/logout",{method:"POST"}); }catch(e){} location.replace("/"); }
 function importSys(it){
   closeImport(); openEditor();
   $("#mtitle").textContent="Importer un job";
