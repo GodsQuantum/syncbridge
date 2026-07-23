@@ -1,0 +1,57 @@
+# SyncBridge — variante « GÈRE TON SYSTÈME ». Identique à compose.example.yaml MAIS
+# les dossiers cron de l'hôte sont montés en LECTURE-ÉCRITURE (rw), ce qui permet à
+# SyncBridge de :
+#   • désactiver/réactiver un cron de l'hôte depuis l'Import (réversible : la ligne
+#     est commentée avec un marqueur #SB-OFF#, jamais supprimée) ;
+#   • écrire de vrais cron hôte quand un job utilise le « backend Système »
+#     (le job survit alors à une panne Docker).
+#
+# ⚠ À n'utiliser que si tu veux que SyncBridge écrive sur ton système. Le conteneur
+# tourne en root et a la socket Docker : traite-le comme un accès root à ta machine,
+# et garde-le derrière ton auth / réseau privé (jamais exposé publiquement).
+#
+#   docker compose -f compose.example.system.yaml up -d
+services:
+  syncbridge:
+    image: ghcr.io/godsquantum/syncbridge:latest
+    container_name: syncbridge
+    user: "0:0"
+    environment:
+      - TZ=${TZ:-Europe/Paris}
+      - SB_DATA=/config
+      - SB_UID=${SB_UID:-1000}
+      - SB_GID=${SB_GID:-1000}
+      - SB_IMPORT_PATHS=/import/scripts:/import/crontab
+      #- SYNCBRIDGE_USER=${SYNCBRIDGE_USER}
+      #- SYNCBRIDGE_PASSWORD=${SYNCBRIDGE_PASSWORD}
+    ports:
+      - 8788:8787
+    volumes:
+      - ./data:/config
+      - /home/youruser:/home/youruser
+      - /home/youruser/scripts:/import/scripts:ro
+
+      # ─── CRON DE L'HÔTE EN ÉCRITURE (rw) — c'est ce qui autorise la gestion ──
+      # Désactiver/réactiver un cron depuis l'UI + backend Système (cron.d).
+      - /etc/crontab:/host/etc/crontab:rw
+      - /etc/cron.d:/host/etc/cron.d:rw
+      - /var/spool/cron/crontabs:/host/crontabs:rw
+      - /proc:/host/proc:ro
+
+      # ─── systemd (optionnel, plus intrusif) ─────────────────────────────────
+      # Gérer les unités systemd (enable/disable) demande que SyncBridge lance
+      # `systemctl` contre l'hôte : conteneur privilégié + socket dbus. Décommente
+      # SEULEMENT si tu en as besoin et comprends le compromis :
+      - /etc/systemd/system:/host/etc/systemd/system:rw
+      #  - /run/systemd:/run/systemd
+      #  - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+      # (+ ajoute `privileged: true` au service, et pour tuer un inotify de l'hôte
+      #  ajoute `pid: host`).
+
+      - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: /mnt
+        target: /mnt
+        bind:
+          propagation: rshared
+    restart: unless-stopped
