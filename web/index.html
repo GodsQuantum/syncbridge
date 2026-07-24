@@ -49,6 +49,17 @@
   .eng-pill b{color:var(--dim);font-weight:500}
   .eng-pill .on{color:var(--green)}
   .eng-pill .off{color:var(--faint)}
+  /* sélecteur d'instance (pilotage multi-serveurs façon Dockge) */
+  .inst-sel{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--surface2);
+    border:1px solid var(--line);border-radius:7px;padding:8px 10px;cursor:pointer;max-width:220px}
+  .inst-sel:focus{outline:none;border-color:var(--cyan-d)}
+  body.piloting .inst-sel{border-color:var(--violet);color:var(--violet)}
+  /* bandeau discret quand on pilote une instance distante */
+  body.piloting .app{box-shadow:inset 0 3px 0 var(--violet)}
+  .rm-row{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);
+    border-radius:7px;margin-bottom:8px;font-family:var(--mono);font-size:12.5px;background:var(--bg)}
+  .rm-row .rm-name{color:var(--ink);font-weight:600}
+  .rm-row .rm-url{color:var(--dim)}
 
   /* ---------- buttons ---------- */
   .btn{font:inherit;font-size:13px;font-weight:550;border:1px solid var(--line);
@@ -280,6 +291,7 @@
       <span>SyncBridge<br><small>cron · watch · rsync · scripts</small></span>
     </div>
     <span class="flex"></span>
+    <select class="inst-sel" id="inst-switch" onchange="switchInstance(this.value)" title="Instance pilotée / Piloted instance"></select>
     <button class="btn ghost sm" onclick="logout()" title="Déconnexion / Log out">⎋</button>
     <button class="btn ghost sm" id="langtog" onclick="toggleLang()" title="Language / Langue"></button>
     <button class="btn" onclick="openImport()">⤵ Importer</button>
@@ -563,6 +575,40 @@
       <button class="btn ghost" onclick="showTrash()">🗑 Corbeille</button>
       <button class="btn ghost" onclick="scanImport()">↻ Rescanner</button>
       <button class="btn pri" onclick="closeImport()">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Instances distantes (pilotage multi-serveurs) ===== -->
+<div class="scrim" id="remote-scrim">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-h">
+      <h2>Instances SyncBridge</h2>
+      <span class="flex"></span>
+      <button class="btn ghost sm" onclick="closeRemotes()">✕</button>
+    </div>
+    <div class="modal-b">
+      <div class="hint" style="margin-bottom:16px">
+        Pilote un autre serveur SyncBridge de ton réseau local depuis cette interface (comme Dockge avec plusieurs agents). Renseigne l'URL de l'autre instance et ses identifiants ; une fois ajoutée, sélectionne-la en haut à droite pour gérer ses jobs, son import système et sa corbeille.
+      </div>
+      <div id="rm-list"></div>
+      <div class="section-h" style="margin:18px 0 14px">Ajouter une instance</div>
+      <div class="field"><label>Nom</label>
+        <input type="text" id="r-name" placeholder="ex. SAL"></div>
+      <div class="field"><label>URL</label>
+        <input type="text" id="r-url" placeholder="ex. http://192.168.1.50:8788">
+        <div class="hint">Adresse de l'autre instance sur le réseau local (IP:port ou nom d'hôte).</div></div>
+      <div class="split">
+        <div class="field" style="margin-bottom:0"><label>Identifiant</label>
+          <input type="text" id="r-user" placeholder="utilisateur de l'autre instance"></div>
+        <div class="field" style="margin-bottom:0"><label>Mot de passe</label>
+          <input type="password" id="r-pass" placeholder="mot de passe de l'autre instance"></div>
+      </div>
+      <div class="hint" style="margin-top:10px">Les identifiants sont ceux du compte SyncBridge de l'instance distante. Stockés sur cette instance pour s'y reconnecter automatiquement.</div>
+    </div>
+    <div class="modal-f">
+      <button class="btn ghost" onclick="closeRemotes()">Fermer</button>
+      <button class="btn pri" onclick="saveRemote()">Ajouter &amp; tester</button>
     </div>
   </div>
 </div>
