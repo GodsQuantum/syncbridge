@@ -4,6 +4,19 @@ let JOBS=[], sw={backup:false,skipNew:false,sysBackup:false};
 let paneState={src:"/mnt",dst:"/mnt"};
 let SYS_ALL=[], SEL={};
 
+// ---- pilotage multi-instances (façon Dockge) ----
+// API = préfixe de proxy vers l'instance sélectionnée ("" = instance locale).
+// ponytail: on intercepte fetch/EventSource pour préfixer les appels /api/ vers
+//   l'instance pilotée, plutôt que réécrire chaque appel un par un. L'auth et la
+//   gestion des remotes restent TOUJOURS locales (jamais proxifiées).
+let API="";
+const _rawFetch=window.fetch.bind(window);
+const _localOnly=p=>p.startsWith("/api/auth/")||p.startsWith("/api/remotes")||p.startsWith("/api/remote/");
+const _wrap=p=>(API&&typeof p==="string"&&p.startsWith("/api/")&&!_localOnly(p))?API+p:p;
+window.fetch=(u,o)=>_rawFetch(_wrap(u),o);
+const _RawES=window.EventSource;
+window.EventSource=function(u,o){return new _RawES(_wrap(u),o);};
+
 const ICON={
   play:'<svg viewBox="0 0 16 16" fill="none"><path d="M4 3l9 5-9 5V3z" fill="currentColor"/></svg>',
   eye:'<svg viewBox="0 0 16 16" fill="none"><path d="M1 8s2.5-4.5 7-4.5S15 8 15 8s-2.5 4.5-7 4.5S1 8 1 8z" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="1.8" fill="currentColor"/></svg>',
@@ -64,6 +77,7 @@ async function boot(){
     const opt=$("#f-engine");
     if(!e.rclone && opt){ const o=opt.querySelector('[value=rclone]'); if(o) o.disabled=true; }
   }catch(e){}
+  await loadRemotes();
   await load();
   setInterval(refreshLive, 2000); // suivi live toutes les 2s
 }
@@ -399,7 +413,52 @@ async function sysKill(it){
   if(!r.ok)return toast(await r.text(),"err");
   toast("Process arrêté","ok"); scanImport();
 }
-async function logout(){ try{ await fetch("/api/auth/logout",{method:"POST"}); }catch(e){} location.replace("/"); }
+async function logout(){ try{ await _rawFetch("/api/auth/logout",{method:"POST"}); }catch(e){} location.replace("/"); }
+
+// ---- instances distantes ----
+let REMOTES=[];
+async function loadRemotes(){
+  try{ REMOTES=await (await _rawFetch("/api/remotes")).json(); }catch(e){ REMOTES=[]; }
+  const sel=$("#inst-switch"); if(!sel)return;
+  sel.innerHTML='<option value="">🖥 Cette instance</option>'
+    +REMOTES.map(r=>`<option value="/api/remote/${r.id}">🔗 ${esc(r.name)}</option>`).join("")
+    +'<option value="__manage">⚙ Gérer les instances…</option>';
+  sel.value=API;
+}
+function switchInstance(v){
+  const sel=$("#inst-switch");
+  if(v==="__manage"){ if(sel)sel.value=API; openRemotes(); return; }
+  API=v;
+  document.body.classList.toggle("piloting", v!=="");
+  const name=v===""?"":(REMOTES.find(r=>("/api/remote/"+r.id)===v)||{}).name;
+  load();
+  toast(v===""?"Instance locale":("Pilotage : "+(name||"instance distante")),"ok");
+}
+function openRemotes(){ $("#remote-scrim").classList.add("open"); renderRemoteList(); ["r-name","r-url","r-user","r-pass"].forEach(i=>$("#"+i).value=""); }
+function closeRemotes(){ $("#remote-scrim").classList.remove("open"); }
+function renderRemoteList(){
+  const box=$("#rm-list"); if(!box)return;
+  if(!REMOTES.length){ box.innerHTML='<div class="hint">Aucune instance distante pour l\'instant.</div>'; return; }
+  box.innerHTML=REMOTES.map(r=>`<div class="rm-row"><span class="rm-name">${esc(r.name)}</span>
+    <span class="rm-url">${esc(r.url)}</span><span class="flex"></span>
+    <button class="btn sm dgr" onclick="delRemote(${r.id})" title="Retirer">✕</button></div>`).join("");
+}
+async function saveRemote(){
+  const p={name:$("#r-name").value.trim(),url:$("#r-url").value.trim(),user:$("#r-user").value.trim(),password:$("#r-pass").value};
+  if(!p.name||!p.url)return toast("Nom et URL requis","err");
+  toast("Test de connexion…","ok");
+  const r=await _rawFetch("/api/remotes",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
+  if(!r.ok)return toast(await r.text(),"err");
+  ["r-name","r-url","r-user","r-pass"].forEach(i=>$("#"+i).value="");
+  await loadRemotes(); renderRemoteList(); toast("Instance ajoutée","ok");
+}
+async function delRemote(id){
+  if(!confirm("Retirer cette instance ? (elle n'est pas modifiée, seul le pilotage d'ici est supprimé)"))return;
+  const r=await _rawFetch("/api/remotes/"+id,{method:"DELETE"});
+  if(!r.ok)return toast(await r.text(),"err");
+  if(API==="/api/remote/"+id){ API=""; document.body.classList.remove("piloting"); load(); }
+  await loadRemotes(); renderRemoteList(); toast("Instance retirée","ok");
+}
 function selSys(idx,on){ if(on)SEL[idx]=SYS_ALL[idx]; else delete SEL[idx]; updateBatchBar(); }
 function updateBatchBar(){ const bar=$("#imp-batch"); if(!bar)return; const n=Object.keys(SEL).length; bar.style.display=n?"flex":"none"; const c=$("#imp-batch-n"); if(c)c.textContent=n; }
 function delSelection(){ delSys(Object.keys(SEL).map(Number)); }
@@ -674,7 +733,15 @@ const I18N_EN = {
   "Vérifie les réglages puis enregistre. Le job sera créé désactivé.":"Check the settings then save. The job will be created disabled.",
   "Nom requis":"Name required","Renseigne la commande à exécuter":"Enter the command to run","Source et destination requises":"Source and destination required","Renseigne l'expression cron":"Enter the cron expression","Accès dossier refusé":"Folder access denied","Job désactivé":"Job disabled","Job réactivé":"Job re-enabled",
   "Éditer le job":"Edit job","Importer un job":"Import a job","Importer ce job":"Import this job","pas de planning détecté":"no schedule detected","vide":"empty",
-  "Toutes les 15 min":"Every 15 min","Toutes les heures":"Every hour","Toutes les 6 h":"Every 6 h","Chaque jour 3 h":"Every day 3am","Chaque jour minuit":"Every day midnight","Chaque nuit 4 h":"Every night 4am","Lun-Ven 3 h":"Mon–Fri 3am","Dimanche 2 h":"Sunday 2am","1er du mois 5 h":"1st of month 5am"
+  "Toutes les 15 min":"Every 15 min","Toutes les heures":"Every hour","Toutes les 6 h":"Every 6 h","Chaque jour 3 h":"Every day 3am","Chaque jour minuit":"Every day midnight","Chaque nuit 4 h":"Every night 4am","Lun-Ven 3 h":"Mon–Fri 3am","Dimanche 2 h":"Sunday 2am","1er du mois 5 h":"1st of month 5am",
+  "Instances SyncBridge":"SyncBridge instances",
+  "Pilote un autre serveur SyncBridge de ton réseau local depuis cette interface (comme Dockge avec plusieurs agents). Renseigne l'URL de l'autre instance et ses identifiants ; une fois ajoutée, sélectionne-la en haut à droite pour gérer ses jobs, son import système et sa corbeille.":"Control another SyncBridge server on your local network from this interface (like Dockge with multiple agents). Enter the other instance's URL and credentials; once added, select it top-right to manage its jobs, system import and trash.",
+  "Ajouter une instance":"Add an instance","URL":"URL","Identifiant":"Username","Mot de passe":"Password",
+  "Adresse de l'autre instance sur le réseau local (IP:port ou nom d'hôte).":"Address of the other instance on the local network (IP:port or hostname).",
+  "Les identifiants sont ceux du compte SyncBridge de l'instance distante. Stockés sur cette instance pour s'y reconnecter automatiquement.":"These are the credentials of the remote instance's SyncBridge account. Stored on this instance to reconnect automatically.",
+  "Ajouter & tester":"Add & test",
+  "🖥 Cette instance":"🖥 This instance","⚙ Gérer les instances…":"⚙ Manage instances…",
+  "Aucune instance distante pour l'instant.":"No remote instances yet."
 };
 let LANG = localStorage.getItem('sb_lang') || 'en';
 const _norm = s => (s||'').replace(/\s+/g,' ').trim();
