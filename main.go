@@ -845,11 +845,17 @@ func main() {
 	mux.HandleFunc("/api/auth/register", apiAuthRegister)
 	mux.HandleFunc("/api/auth/login", apiAuthLogin)
 	mux.HandleFunc("/api/auth/logout", apiAuthLogout)
+	// pilotage multi-instances (façon Dockge) : liste/ajout, suppression, proxy.
+	mux.HandleFunc("/api/remotes", apiRemotes)
+	mux.HandleFunc("/api/remotes/", apiRemoteByID)
+	mux.HandleFunc("/api/remote/", apiRemoteProxy)
 
 	sub, _ := fs.Sub(webFS, "web")
 	mux.Handle("/", http.FileServer(http.FS(sub)))
 
-	addr := ":8787" // port interne FIXE ; l'utilisateur mappe via "ports:" dans le compose
+	// Port interne : 8787 par défaut (mappé via "ports:" dans le compose). Surchargeable
+	// via SB_PORT pour faire tourner plusieurs instances sur une même machine sans Docker.
+	addr := ":" + env("SB_PORT", "8787")
 	fmt.Printf("SyncBridge démarré | port interne 8787 | data %s | rsync=%v rclone=%v | %d job(s)\n",
 		dataDir, hasBin("rsync"), hasBin("rclone"), len(jobs))
 	checkRsyncXattr()
