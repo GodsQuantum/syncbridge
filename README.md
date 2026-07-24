@@ -43,6 +43,7 @@ The rule of the house: **total visibility**. Nothing runs that you can't see. Ev
 - ▶️ **On-Demand Runner** — trigger utility scripts manually, async, with streamed logs and a kill button.
 - 🔁 **rsync / rclone sync** — mirror / accumulate / move, checksum or time compare, bandwidth limit, exclusions, rotating trash, faithful system backup (ACL/xattr).
 - 🔎 **System Monitor** — scans host crontabs, systemd units (`.service`/`.timer`/`.path`) and stray `inotifywait` processes, so nothing on your box escapes you. Import splits them into **your triggers** (scripts, personal cron, inotify) vs **system triggers** (OS/packages), and lets you **reversibly disable/re-enable** a host trigger — cron lines are commented with a `#SB-OFF#` marker, systemd units toggled via `systemctl`, **never deleted**. Needs a read-write host mount (see `compose.example.system.yaml`).
+- 🕸️ **Multi-instance control** — run SyncBridge on several boxes and drive them all from one UI (like **Dockge** agents). Add a remote instance by URL + its login; the top-right switcher then pilots its jobs, its system import and its live logs through a built-in reverse proxy. You can't mount another server's *system* volumes across the network — so you talk to its SyncBridge instead. Credentials are stored on the piloting instance (in `/config`, `0600`) to reconnect automatically.
 - 🔐 **Login** — a web login in the app's theme. First launch: you create an account (username + password, hashed with **bcrypt**); after that, you log in. Or pin credentials via `SYNCBRIDGE_USER` / `SYNCBRIDGE_PASSWORD`. Since the UI can run scripts on your box, **never expose it without auth** — keep it on your LAN / behind Tailscale or a reverse proxy.
 
 ## 🛡️ Safety first
@@ -92,6 +93,10 @@ Every job picks where it runs:
 - 🟢 **SyncBridge backend** *(default)* — SyncBridge runs the job itself: live logs, kill button, clean shutdown, anti-overlap lock. Simple and fully visible. Stops if the container stops.
 - 🟣 **System backend** — SyncBridge writes a **real host cron entry** (`/etc/cron.d`, with `flock` + `PATH`) or a **systemd `.path`/`.service` unit**, so the job **keeps running even if Docker/SyncBridge is down**. Invariant: the artifact is removed before any rewrite and cleaned up on delete or backend switch — never a hidden duplicate. Writing host cron needs a read-write mount; the systemd variant needs a privileged container (see `compose.example.yaml`).
 
+## 🕸️ Multi-instance (pilot other servers)
+
+Install SyncBridge on each machine, then from one instance add the others by **URL + their login** (top-right switcher → *Manage instances*). That instance proxies every API call to the selected remote, so its jobs, system import, trash and **live logs all work as if local** — you drive another box's crons without mounting its disks. Requirement: the piloting instance must be able to reach the remote over the LAN (e.g. `http://192.168.1.50:8788`). Keep it inside your LAN / Tailscale; the proxy is admin-only but there's no TLS between instances yet.
+
 ## 🔌 API
 
 ```
@@ -103,6 +108,10 @@ POST       /api/jobs/{id}/kill   stop the running job
 GET        /api/system/scan      host triggers detected (read-only)
 GET        /api/import/scan      rsync/rclone commands found in your scripts/crontab
 POST       /api/system/toggle    reversibly disable/re-enable a host trigger
+POST       /api/system/delete    permanently delete host triggers (batch, confirm="delete")
+GET        /api/system/trash     recoverable deleted triggers  ·  /api/system/restore
+GET/POST   /api/remotes          list / add a remote instance   ·  DELETE /api/remotes/{id}
+ANY        /api/remote/{id}/...  proxy to a piloted remote instance
 POST       /api/auth/register    first-run account creation
 POST       /api/auth/login       log in  ·  /api/auth/logout  log out
 ```
@@ -115,11 +124,11 @@ go test ./...              # unit tests
 docker build -t syncbridge .
 ```
 
-One Go package, a handful of files (`main.go`, `sysmon.go`, `system_backend.go`, `sys_toggle.go`, `auth.go`, `web/`). Easy to fork. 🍴
+One Go package, a handful of files (`main.go`, `sysmon.go`, `system_backend.go`, `sys_toggle.go`, `remote.go`, `auth.go`, `web/`). Easy to fork. 🍴
 
 ## 🗺️ Roadmap
 
-Drive a second server over SSH · USB auto-ingest triggers · richer per-job history.
+USB auto-ingest triggers · richer per-job history · optional TLS between piloted instances.
 
 ## 🔍 Keywords
 
