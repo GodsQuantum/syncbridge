@@ -20,7 +20,8 @@ Le mot d'ordre : **visibilité totale**. Rien ne s'exécute sans que tu le voies
 - **Surveillance de dossier** — surveille un dossier, filtre par motif (`*.mp4`), déclenche une action. **NFS-safe** : hybride inotify + polling, parce qu'inotify seul ne voit jamais les écritures distantes NFS.
 - **Exécution manuelle** — lance des scripts utilitaires à la demande, en asynchrone, avec logs streamés et bouton d'arrêt.
 - **Synchro rsync / rclone** — miroir / accumulation / déplacement, comparaison checksum ou date, limite de débit, exclusions, corbeille rotative, backup système fidèle (ACL/xattr).
-- **Moniteur système** *(lecture seule)* — scanne les crontabs, unités systemd (`.service`/`.timer`/`.path`) et process `inotifywait` de l'hôte, pour que rien ne t'échappe.
+- **Moniteur système** *(lecture seule)* — scanne les crontabs, unités systemd (`.service`/`.timer`/`.path`) et process `inotifywait` de l'hôte, pour que rien ne t'échappe. L'import permet aussi de **désactiver/réactiver de façon réversible** un déclencheur hôte (cron commenté `#SB-OFF#`, systemd via `systemctl`) et de **supprimer définitivement** (par lot, confirmation « delete », avec corbeille récupérable).
+- **Pilotage multi-instances** — installe SyncBridge sur plusieurs machines et pilote-les toutes depuis une seule UI (comme les agents **Dockge**). Ajoute une instance distante par URL + ses identifiants ; le sélecteur en haut à droite pilote alors ses jobs, son import système et ses logs live via un reverse-proxy intégré. On ne peut pas monter les volumes *système* d'un autre serveur sur le réseau — donc on parle à son SyncBridge. Les identifiants sont stockés sur l'instance pilote (`/config`, `0600`) pour se reconnecter automatiquement.
 
 ## La sécurité d'abord
 
@@ -69,7 +70,7 @@ Chaque job choisit où il s'exécute :
 
 ## Roadmap
 
-Piloter un second serveur en SSH · déclencheurs d'ingestion USB · historique par job plus riche.
+Déclencheurs d'ingestion USB · historique par job plus riche · TLS optionnel entre instances pilotées.
 
 ## Licence
 
