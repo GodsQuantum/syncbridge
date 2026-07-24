@@ -851,7 +851,14 @@ func main() {
 	mux.HandleFunc("/api/remote/", apiRemoteProxy)
 
 	sub, _ := fs.Sub(webFS, "web")
-	mux.Handle("/", http.FileServer(http.FS(sub)))
+	fileSrv := http.FileServer(http.FS(sub))
+	// no-cache : le navigateur revalide index.html/app.js à chaque chargement.
+	// Évite un asset périmé en cache après une mise à jour d'image (sinon le nouvel
+	// index.html peut cohabiter avec un ancien app.js caché -> UI cassée).
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		fileSrv.ServeHTTP(w, r)
+	}))
 
 	// Port interne : 8787 par défaut (mappé via "ports:" dans le compose). Surchargeable
 	// via SB_PORT pour faire tourner plusieurs instances sur une même machine sans Docker.
